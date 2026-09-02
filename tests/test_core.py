@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from envs_xmpp_core.config.literals import parse_literal
+from envs_xmpp_core.config.python_file import replace_or_append_assignment_text
+from envs_xmpp_core.release.github import github_api_url_from_release_url, release_tag_from_redirect_url
+from envs_xmpp_core.release.versions import compare_versions
+from envs_xmpp_core.storage.files import atomic_write_text, sha256_file
+from envs_xmpp_core.xmpp.connection import connect_kwargs
+from envs_xmpp_core.xmpp.jid import bare_jid, build_client_jid
+from envs_xmpp_core.xmpp.stanza import safe_get_plugin, safe_plugin_value
+
+
+def test_jid_helpers():
+    assert bare_jid("User@Example.org/res") == "user@example.org"
+    assert build_client_jid("bot@example.org/old", "new") == "bot@example.org/new"
+
+
+def test_version_semantics():
+    assert compare_versions("1.2.0", "1.2") == 0
+    assert compare_versions("1.2.0", "1.2.0rc1") > 0
+    assert compare_versions("1.3", "1.2.9") > 0
+
+
+def test_github_helpers():
+    assert github_api_url_from_release_url("https://github.com/envs-net/envsbot/releases/latest") == "https://api.github.com/repos/envs-net/envsbot/releases/latest"
+    assert release_tag_from_redirect_url("https://github.com/envs-net/envsbot/releases/tag/v1.2.3") == "1.2.3"
+
+
+def test_config_literal_and_replace():
+    assert parse_literal("true") is True
+    assert parse_literal("None") is None
+    text = "A = 1\nB = {\n  'x': 1,\n}\n"
+    updated = replace_or_append_assignment_text(text, "B", "B = {'x': 2}")
+    assert "'x': 1" not in updated
+    compile(updated, "config.py", "exec")
+    appended = replace_or_append_assignment_text(updated, "C", "C = 3")
+    assert "# Runtime config edits\nC = 3" in appended
+
+
+def test_atomic_write_and_hash(tmp_path: Path):
+    path = tmp_path / "secret.txt"
+    atomic_write_text(path, "hello")
+    assert path.read_text() == "hello"
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert len(sha256_file(path)) == 64
+
+
+def test_connection_signature_compatibility():
+    class AddressClient:
+        def connect(self, address=None, use_ssl=False, force_starttls=True):
+            return True
+    kwargs = connect_kwargs(AddressClient(), host="example.org", port=5223, direct_tls=True)
+    assert kwargs == {"address": ("example.org", 5223), "use_ssl": True, "force_starttls": False}
+
+
+def test_stanza_helpers():
+    class Plugin:
+        def get(self, key):
+            return {"jid": "room@example.org"}.get(key)
+    class Stanza:
+        def get_plugin(self, name, check=True):
+            return Plugin() if name == "muc" else None
+    plugin = safe_get_plugin(Stanza(), "muc")
+    assert safe_plugin_value(plugin, "jid") == "room@example.org"

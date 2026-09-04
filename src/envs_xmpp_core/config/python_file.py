@@ -9,7 +9,7 @@ from envs_xmpp_core.storage.files import atomic_write_text
 
 def assignment_span(text: str, name: str, *, filename: str = "<config>") -> tuple[int, int]:
     tree = ast.parse(text, filename=filename)
-    matches: list[ast.AST] = []
+    matches: list[ast.stmt] = []
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
             matches.append(node)

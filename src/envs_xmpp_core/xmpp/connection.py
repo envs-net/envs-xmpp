@@ -13,9 +13,18 @@ def connect_signature_parameters(connect_method: Any) -> Mapping[str, inspect.Pa
         return {}
 
 
-def connect_kwargs(xmpp: Any, *, host: object | None, port: object | None, direct_tls: bool, jid_domain: str | None = None) -> dict[str, Any]:
+def connect_kwargs(
+    xmpp: Any,
+    *,
+    host: Any | None,
+    port: Any | None,
+    direct_tls: bool,
+    jid_domain: str | None = None,
+    parameters: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     target_host = host or jid_domain or boundjid_domain(xmpp)
-    parameters = connect_signature_parameters(xmpp.connect)
+    if parameters is None:
+        parameters = connect_signature_parameters(xmpp.connect)
     kwargs: dict[str, Any] = {}
     if "address" in parameters and target_host and port is not None:
         kwargs["address"] = (target_host, int(port))
@@ -31,13 +40,19 @@ def connect_kwargs(xmpp: Any, *, host: object | None, port: object | None, direc
     return kwargs
 
 
-def connect_kwargs_from_mapping(xmpp: Any, config: Mapping[str, Any]) -> dict[str, Any]:
+def connect_kwargs_from_mapping(
+    xmpp: Any,
+    config: Mapping[str, Any],
+    *,
+    parameters: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     return connect_kwargs(
         xmpp,
         host=config.get("host"),
         port=config.get("port"),
         direct_tls=bool(config.get("direct_tls", False)),
         jid_domain=configured_jid_domain(config),
+        parameters=parameters,
     )
 
 

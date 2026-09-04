@@ -110,7 +110,9 @@ class TaskSupervisor:
         }
         self._tasks[task] = meta
         self._by_scope.setdefault(scope, set()).add(task)
-        task.add_done_callback(self._on_task_done)
+        add_done_callback = getattr(task, "add_done_callback", None)
+        if callable(add_done_callback):
+            add_done_callback(self._on_task_done)
         return task
 
     def create_resilient(

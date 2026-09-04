@@ -22,7 +22,7 @@ def start_muc_join_task(muc_plugin: Any, room: str, nick: str, *, timeout: float
     if asyncio.isfuture(result):
         return result, api_name
     if inspect.isawaitable(result):
-        return asyncio.create_task(result), api_name
+        return asyncio.ensure_future(result), api_name
     return None, api_name
 
 
@@ -57,3 +57,38 @@ async def await_muc_join_compat(muc_plugin: Any, room: str, nick: str, *, timeou
         await drain_task(task)
         return False, api_name, exc
     return True, api_name, None
+
+
+async def join_muc_with_timeout(
+    muc_plugin: Any,
+    room: str,
+    nick: str,
+    *,
+    timeout: float,
+    join_kwargs: dict[str, Any] | None = None,
+    cleanup_on_timeout: bool = True,
+    on_cleanup_error: Any | None = None,
+) -> None:
+    """Join a MUC with a hard timeout and optional ghost-membership cleanup.
+
+    This primitive intentionally calls ``join_muc`` rather than
+    ``join_muc_wait`` because callers such as envsbot rely on Slixmpp's
+    historical join-presence behavior and perform their own membership
+    tracking after this await completes.
+    """
+    result = muc_plugin.join_muc(room, nick, **dict(join_kwargs or {}))
+    try:
+        if inspect.isawaitable(result):
+            await asyncio.wait_for(result, timeout=max(float(timeout), 0.1))
+    except TimeoutError:
+        if cleanup_on_timeout:
+            try:
+                leave_result = muc_plugin.leave_muc(room, nick)
+                if inspect.isawaitable(leave_result):
+                    await leave_result
+            except Exception as exc:
+                # Cleanup is best-effort; the join timeout remains the primary
+                # error and callers decide how to log or retry it.
+                if callable(on_cleanup_error):
+                    on_cleanup_error(exc)
+        raise

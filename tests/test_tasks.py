@@ -27,3 +27,27 @@ async def test_resilient_circuit_callback():
     with pytest.raises(RuntimeError, match="task circuit open"):
         await task
     assert calls and calls[0][:2] == ("runtime", "broken")
+
+@pytest.mark.asyncio
+async def test_create_accepts_task_like_without_done_callback(monkeypatch):
+    class TaskLike:
+        def done(self):
+            return False
+
+        def cancel(self):
+            return None
+
+    created = TaskLike()
+
+    def fake_create_task(coro, **_kwargs):
+        coro.close()
+        return created
+
+    monkeypatch.setattr(asyncio, "create_task", fake_create_task)
+    supervisor = TaskSupervisor()
+
+    async def worker():
+        return None
+
+    assert supervisor.create("scope", worker(), name="worker") is created
+    assert supervisor.owns(created)

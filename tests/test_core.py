@@ -67,3 +67,79 @@ def test_stanza_helpers():
             return Plugin() if name == "muc" else None
     plugin = safe_get_plugin(Stanza(), "muc")
     assert safe_plugin_value(plugin, "jid") == "room@example.org"
+
+@pytest.mark.asyncio
+async def test_join_muc_with_timeout_cleans_up_timed_out_membership():
+    from envs_xmpp_core.xmpp.muc_join import join_muc_with_timeout
+
+    blocker = asyncio.Event()
+    left = []
+
+    class Muc:
+        async def join_muc(self, room, nick, **kwargs):
+            assert kwargs == {"pshow": "chat"}
+            await blocker.wait()
+
+        async def leave_muc(self, room, nick):
+            left.append((room, nick))
+
+    with pytest.raises(TimeoutError):
+        await join_muc_with_timeout(
+            Muc(),
+            "room@example.org",
+            "Bot",
+            timeout=0.01,
+            join_kwargs={"pshow": "chat"},
+        )
+    assert left == [("room@example.org", "Bot")]
+
+
+@pytest.mark.asyncio
+async def test_watchdog_can_defer_ready_by_one_loop_turn():
+    from envs_xmpp_core.runtime.watchdog import RuntimeWatchdog, WatchdogOptions
+
+    ready = False
+    notifications = []
+
+    def predicate():
+        return ready
+
+    runtime = RuntimeWatchdog(
+        service_name="test",
+        options=WatchdogOptions(defer_ready_notification=True),
+        ready_predicate=predicate,
+        notifier=lambda payload: notifications.append(payload) or True,
+    )
+
+    assert runtime.notify_ready() is False
+    assert notifications == []
+    ready = True
+    await asyncio.sleep(0)
+    assert runtime.ready_sent is True
+    assert notifications == ["READY=1\nSTATUS=test startup complete"]
+
+@pytest.mark.asyncio
+async def test_watchdog_options_provider_is_read_at_start(monkeypatch):
+    from envs_xmpp_core.runtime.watchdog import RuntimeWatchdog, WatchdogOptions
+
+    monkeypatch.delenv("NOTIFY_SOCKET", raising=False)
+    monkeypatch.delenv("WATCHDOG_USEC", raising=False)
+    current = {"enabled": False}
+
+    runtime = RuntimeWatchdog(
+        service_name="test",
+        options=WatchdogOptions(enabled=True),
+        options_provider=lambda: WatchdogOptions(
+            enabled=current["enabled"],
+            interval_seconds=60,
+        ),
+        notifier=lambda _payload: True,
+    )
+
+    await runtime.start()
+    assert runtime.task is None
+
+    current["enabled"] = True
+    await runtime.start()
+    assert runtime.task is not None
+    await runtime.stop()

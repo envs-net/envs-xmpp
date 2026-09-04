@@ -21,6 +21,7 @@ class WatchdogOptions:
     interval_seconds: float = 20.0
     lag_warning_seconds: float = 2.0
     lag_failure_seconds: float = 30.0
+    defer_ready_notification: bool = False
 
 
 @dataclass
@@ -50,6 +51,8 @@ class RuntimeWatchdog:
         on_lag: Callable[[float, float], Awaitable[None] | None] | None = None,
         ready_predicate: Callable[[], bool] | None = None,
         notifier: Callable[[str], bool] = sd_notify,
+        on_ready: Callable[[], Any] | None = None,
+        options_provider: Callable[[], WatchdogOptions] | None = None,
     ) -> None:
         self.service_name = service_name
         self.options = options or WatchdogOptions()
@@ -58,14 +61,29 @@ class RuntimeWatchdog:
         self.on_lag = on_lag
         self.ready_predicate = ready_predicate
         self.notifier = notifier
+        self.on_ready = on_ready
+        self.options_provider = options_provider
         self.task: asyncio.Task[Any] | None = None
         self._lag_alert_task: asyncio.Task[Any] | None = None
         self.stop_event = asyncio.Event()
         self.state = WatchdogState()
+        self._ready_notification_pending = False
+        self._ready_sent = False
+
+    def _current_options(self) -> WatchdogOptions:
+        provider = self.options_provider
+        if provider is None:
+            return self.options
+        try:
+            return provider()
+        except Exception:
+            log.exception("[WATCHDOG] Failed to refresh runtime options")
+            return self.options
 
     async def start(self) -> None:
+        options = self._current_options()
         self.state.systemd_active = bool(os.environ.get("NOTIFY_SOCKET") and os.environ.get("WATCHDOG_USEC"))
-        self.state.enabled = bool(self.options.enabled) or self.state.systemd_active
+        self.state.enabled = bool(options.enabled) or self.state.systemd_active
         if not self.state.enabled or (self.task is not None and not self.task.done()):
             return
         self.stop_event = asyncio.Event()
@@ -75,27 +93,77 @@ class RuntimeWatchdog:
             self.task = asyncio.create_task(self._run(), name="runtime-watchdog")
         self.state.worker_running = True
 
-    def notify_ready(self) -> bool:
-        if self.ready_predicate is not None and not self.ready_predicate():
-            return False
+    @property
+    def ready_sent(self) -> bool:
+        """Return whether READY=1 has been accepted by the notifier."""
+        return self._ready_sent
+
+    def _send_ready(self) -> bool:
         status = (
             f"{self.service_name} started and monitoring event-loop health"
             if self.state.enabled
             else f"{self.service_name} startup complete"
         )
-        return self.notifier(f"READY=1\nSTATUS={status}")
+        sent = self.notifier(f"READY=1\nSTATUS={status}")
+        if sent:
+            self._ready_sent = True
+            callback = self.on_ready
+            if callback is not None:
+                try:
+                    callback()
+                except Exception:
+                    log.exception("[WATCHDOG] Failed to run ready callback")
+        return sent
+
+    def _notify_ready_if_complete(self) -> None:
+        self._ready_notification_pending = False
+        if self.ready_predicate is None or self.ready_predicate():
+            self._send_ready()
+
+    def notify_ready(self) -> bool:
+        if self.ready_predicate is None or self.ready_predicate():
+            return self._send_ready()
+        if not self.options.defer_ready_notification or self._ready_notification_pending:
+            return False
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+        self._ready_notification_pending = True
+        loop.call_soon(self._notify_ready_if_complete)
+        return False
 
     async def stop(self) -> None:
         self.stop_event.set()
         task, alert_task = self.task, self._lag_alert_task
         self.task = None
         self._lag_alert_task = None
-        for running in (task, alert_task):
-            if running is not None and not running.done():
-                running.cancel()
-        awaitables = [running for running in (task, alert_task) if running is not None]
-        if awaitables:
-            await asyncio.gather(*awaitables, return_exceptions=True)
+
+        supervisor = self.supervisor
+        owns = getattr(supervisor, "owns", None) if supervisor is not None else None
+        cancel_scope = getattr(supervisor, "cancel_scope", None) if supervisor is not None else None
+        if not callable(cancel_scope) and supervisor is not None:
+            cancel_scope = getattr(supervisor, "cancel_group", None)
+
+        if (
+            task is not None
+            and callable(owns)
+            and owns(task)
+            and callable(cancel_scope)
+        ):
+            await cancel_scope("_runtime", timeout=5.0)
+        else:
+            for running in (task, alert_task):
+                if running is not None and not running.done():
+                    running.cancel()
+            awaitables = [
+                running
+                for running in (task, alert_task)
+                if running is not None and inspect.isawaitable(running)
+            ]
+            if awaitables:
+                await asyncio.gather(*awaitables, return_exceptions=True)
+
         self.state.worker_running = False
         self.notifier(f"STOPPING=1\nSTATUS={self.service_name} shutting down")
 
@@ -165,9 +233,10 @@ class RuntimeWatchdog:
 
     async def _run(self) -> None:
         await self._wait_ready()
-        interval = systemd_watchdog_interval(max(1.0, float(self.options.interval_seconds)))
-        warning_threshold = max(0.1, float(self.options.lag_warning_seconds))
-        failure_threshold = max(warning_threshold, float(self.options.lag_failure_seconds))
+        options = self._current_options()
+        interval = systemd_watchdog_interval(max(1.0, float(options.interval_seconds)))
+        warning_threshold = max(0.1, float(options.lag_warning_seconds))
+        failure_threshold = max(warning_threshold, float(options.lag_failure_seconds))
         loop = asyncio.get_running_loop()
         expected = loop.time() + interval
         self.state.worker_running = True

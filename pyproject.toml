@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "envs-xmpp-core"
-version = "0.1.1"
+version = "0.1.2"
 readme = "README.md"
 description = "Shared runtime primitives for envs.net XMPP bots"
 requires-python = ">=3.12"
@@ -15,6 +15,20 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "mypy>=1.10",
+  "pytest>=8",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.6",
+  "twine>=5",
+]
+
+[project.urls]
+Repository = "https://github.com/envs-net/envs-xmpp-core"
+Issues = "https://github.com/envs-net/envs-xmpp-core/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

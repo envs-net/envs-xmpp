@@ -143,3 +143,34 @@ async def test_watchdog_options_provider_is_read_at_start(monkeypatch):
     await runtime.start()
     assert runtime.task is not None
     await runtime.stop()
+
+
+def test_sqlite_integrity_primitive(tmp_path):
+    import sqlite3
+
+    from envs_xmpp_core.storage.sqlite import check_sqlite_integrity
+
+    path = tmp_path / "healthy.sqlite3"
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+        connection.execute("CREATE TABLE child (parent_id INTEGER REFERENCES parent(id))")
+        connection.commit()
+    finally:
+        connection.close()
+
+    result = check_sqlite_integrity(path, check_foreign_keys=True)
+    assert result.ok is True
+    assert result.integrity == ("ok",)
+    assert result.foreign_key_violations == ()
+    assert result.message == "ok"
+
+
+def test_sqlite_integrity_primitive_validates_missing_file(tmp_path):
+    from envs_xmpp_core.storage.sqlite import check_sqlite_integrity
+
+    path = tmp_path / "missing.sqlite3"
+    result = check_sqlite_integrity(path, require_nonempty_file=True)
+    assert result.ok is False
+    assert result.error == f"Database file does not exist: {path.resolve()}"

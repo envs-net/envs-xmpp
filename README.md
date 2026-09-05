@@ -49,17 +49,29 @@ src/
 │   ├── storage/
 │   └── xmpp/
 └── envs_xmpp_ops/
+    ├── accounts.py
     ├── deploy.py
     ├── git.py
+    ├── interaction.py
+    ├── paths.py
     ├── profile.py
+    ├── service.py
     ├── systemd.py
     └── venv.py
 ```
 
-`envs_xmpp_ops` does not solve bootstrap by assuming the package is already
-installed. Bot deploy scripts remain thin stdlib-only bootstrap frontends; they
-may install/pin this distribution into a dedicated deploy environment before
-handing off to the shared operations code.
+`envs_xmpp_ops` is designed for thin bot-specific deployment frontends. The
+frontends keep bot policy such as config migration, database backup/restore and
+service hardening local, while shared Git release selection, systemd inspection,
+operator confirmation, account/path checks and virtualenv creation live here.
+
+Fresh installs do not assume that this package is already present. Each bot
+ships a tiny stdlib-only bootstrap shim. When the required `envs-xmpp` minor
+series is unavailable, that shim creates a cached deployment virtualenv below
+`$XDG_CACHE_HOME/envs-xmpp/deploy/` (or `~/.cache/envs-xmpp/deploy/`), installs
+the pinned compatible series from PyPI, and re-executes the deployment frontend.
+`ENVS_XMPP_DEPLOY_SOURCE` can point at a local checkout or wheel for development
+and pre-release testing.
 
 ## CI and PyPI releases
 
@@ -68,10 +80,5 @@ it exactly matches `project.version` in `pyproject.toml`. Release distributions
 are published through PyPI Trusted Publishing/OIDC, without a long-lived PyPI
 token.
 
-Before the first release configure a PyPI Trusted Publisher for:
-
-- PyPI project: `envs-xmpp`
-- GitHub owner: `envs-net`
-- Repository: `envs-xmpp`
-- Workflow: `release.yml`
-- Environment: `pypi`
+PyPI publishing is configured through the `pypi` GitHub environment and the
+Trusted Publisher for `envs-net/envs-xmpp` using `.github/workflows/release.yml`.

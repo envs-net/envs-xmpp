@@ -1,7 +1,7 @@
 # envs-xmpp
 
-Shared technical infrastructure for the envs.net XMPP bots `envsbot` and
-`muc_banbot`.
+Shared technical infrastructure for the envs.net XMPP bots [`envsbot`](https://github.com/envs-net/envsbot) and
+[`muc_banbot`](https://github.com/envs-net/muc_banbot).
 
 One distribution intentionally ships two stable Python packages:
 
@@ -22,6 +22,10 @@ logic, plugin systems or bot-specific lifecycle policy.
 - no mandatory third-party runtime dependencies
 
 The bots themselves remain responsible for dependencies such as Slixmpp.
+
+Shared storage primitives include SQLite integrity checking and safe ZIP member
+validation/streaming. Pagination provides a neutral page-slice model while bot
+frontends retain their existing command-specific return formats.
 
 ## Development install
 
@@ -44,9 +48,13 @@ from envs_xmpp_ops.profile import DeploymentProfile
 src/
 ├── envs_xmpp_core/
 │   ├── config/
+│   ├── pagination.py
 │   ├── release/
 │   ├── runtime/
 │   ├── storage/
+│   │   ├── archive.py
+│   │   ├── files.py
+│   │   └── sqlite.py
 │   └── xmpp/
 └── envs_xmpp_ops/
     ├── accounts.py
@@ -66,10 +74,10 @@ service hardening local, while shared Git release selection, systemd inspection,
 operator confirmation, account/path checks and virtualenv creation live here.
 
 Fresh installs do not assume that this package is already present. Each bot
-ships a tiny stdlib-only bootstrap shim. When the required `envs-xmpp` minor
-series is unavailable, that shim creates a cached deployment virtualenv below
-`$XDG_CACHE_HOME/envs-xmpp/deploy/` (or `~/.cache/envs-xmpp/deploy/`), installs
-the pinned compatible series from PyPI, and re-executes the deployment frontend.
+ships a tiny stdlib-only bootstrap shim. When the exact required `envs-xmpp`
+version is unavailable, that shim creates a versioned cached deployment virtualenv
+below `$XDG_CACHE_HOME/envs-xmpp/deploy/` (or `~/.cache/envs-xmpp/deploy/`),
+installs the pinned version from PyPI, and re-executes the deployment frontend.
 `ENVS_XMPP_DEPLOY_SOURCE` can point at a local checkout or wheel for development
 and pre-release testing.
 

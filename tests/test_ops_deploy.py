@@ -124,7 +124,9 @@ def test_systemd_inspection_uses_injected_runners():
         calls.append(command)
         return _result()
 
-    which = lambda _name: "/usr/bin/systemctl"
+    def which(_name: str) -> str:
+        return "/usr/bin/systemctl"
+
     assert systemctl_exists("bot.service", run_command=run_command, which=which) is True
     assert service_active("bot.service", run_command=run_command, which=which) is True
     assert calls[0][:2] == ["systemctl", "cat"]

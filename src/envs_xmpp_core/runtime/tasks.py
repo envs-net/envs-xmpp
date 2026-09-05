@@ -399,14 +399,13 @@ class TaskSupervisor:
                 return True
 
             for done_task in done:
-                try:
-                    done_task.result()
-                except asyncio.CancelledError:
+                if done_task.cancelled():
                     continue
-                except Exception as exc:
+                error = done_task.exception()
+                if error is not None:
                     log.debug(
                         "[TASKS] Task raised during cancellation",
-                        exc_info=exc,
+                        exc_info=error,
                     )
 
         self._prune_task_unless_failed(task)
@@ -438,14 +437,13 @@ class TaskSupervisor:
                 )
 
             for done_task in done:
-                try:
-                    done_task.result()
-                except asyncio.CancelledError:
+                if done_task.cancelled():
                     continue
-                except Exception as exc:
+                error = done_task.exception()
+                if error is not None:
                     log.debug(
                         "[TASKS] Task raised during cancellation",
-                        exc_info=exc,
+                        exc_info=error,
                     )
 
         for task in scope_tasks:

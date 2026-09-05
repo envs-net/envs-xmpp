@@ -1,69 +1,77 @@
-# envs-xmpp-core
+# envs-xmpp
 
-Shared technical runtime infrastructure for `envsbot` and `muc_banbot`.
+Shared technical infrastructure for the envs.net XMPP bots `envsbot` and
+`muc_banbot`.
 
-The package intentionally contains no bot commands, permissions, database
-schemas, moderation logic, plugin systems or bot-specific lifecycle code.
-Public compatibility facades remain in the bot repositories while migrations
-are in progress.
+One distribution intentionally ships two stable Python packages:
+
+- `envs_xmpp_core`: bot-neutral runtime, XMPP, config, storage and release primitives.
+- `envs_xmpp_ops`: deployment and operations primitives.
+
+Keeping both in one distribution gives runtime and deployment infrastructure one
+version, one repository and one release pipeline while preserving the existing
+import APIs used by both bots.
+
+The package contains no bot commands, permissions, database schemas, moderation
+logic, plugin systems or bot-specific lifecycle policy.
 
 ## Compatibility
 
 - Python 3.12 and 3.13
-- `slixmpp>=1.8,<2`
 - GPL-3.0-only
+- no mandatory third-party runtime dependencies
+
+The bots themselves remain responsible for dependencies such as Slixmpp.
 
 ## Development install
 
-For local development, install the checkout into each bot virtualenv:
+Install the checkout into each bot virtual environment:
 
 ```bash
-python -m pip install -e /path/to/envs-xmpp-core
+python -m pip install -e /path/to/envs-xmpp
 ```
 
-The bot repositories keep compatibility facades while the implementation lives
-in this package. Their reproducible constraint files pin the tested core release.
+Existing imports remain valid:
 
-## 0.1.1 compatibility fixes
+```python
+from envs_xmpp_core.runtime.tasks import TaskSupervisor
+from envs_xmpp_ops.profile import DeploymentProfile
+```
 
-- restore task-like object compatibility used by lifecycle tests and embedders
-- support lazily supplied watchdog options for bots that apply runtime config later
-- support deferred systemd `READY=1` notification after reconnect completion
-- add the legacy MUC join-with-timeout primitive including timeout cleanup
-- preserve configurable Slixmpp signature inspection through bot facades
+## Package layout
 
+```text
+src/
+├── envs_xmpp_core/
+│   ├── config/
+│   ├── release/
+│   ├── runtime/
+│   ├── storage/
+│   └── xmpp/
+└── envs_xmpp_ops/
+    ├── deploy.py
+    ├── git.py
+    ├── profile.py
+    ├── systemd.py
+    └── venv.py
+```
 
-## 0.1.2 invite parsing
-
-- add a neutral `RoomInvite` model and shared XEP-0045/XEP-0249 stanza parsing
-- share invite age calculation while keeping persistence, policy, commands, and notifications bot-local
-- add a read-only SQLite integrity/foreign-key verification primitive while backup policy stays bot-local
+`envs_xmpp_ops` does not solve bootstrap by assuming the package is already
+installed. Bot deploy scripts remain thin stdlib-only bootstrap frontends; they
+may install/pin this distribution into a dedicated deploy environment before
+handing off to the shared operations code.
 
 ## CI and PyPI releases
 
-GitHub Actions runs the test suite on Python 3.12 and 3.13 for every branch push
-and pull request.
+GitHub Actions tests Python 3.12 and 3.13. A `vX.Y.Z` tag is accepted only when
+it exactly matches `project.version` in `pyproject.toml`. Release distributions
+are published through PyPI Trusted Publishing/OIDC, without a long-lived PyPI
+token.
 
-PyPI releases use Trusted Publishing (OIDC); no long-lived PyPI API token is
-stored in GitHub. The release workflow only accepts tags that exactly match the
-version declared in `pyproject.toml`.
+Before the first release configure a PyPI Trusted Publisher for:
 
-Release procedure:
-
-1. Update `project.version` in `pyproject.toml`.
-2. Run `python -m pip install -e ".[dev]"` and `./scripts/quality.sh`.
-3. Commit and push the release state.
-4. Create and push the matching tag, for example `v0.1.2`.
-5. Approve the protected GitHub `pypi` environment if approval is enabled.
-
-Before the first release, configure a PyPI Trusted Publisher (a pending
-publisher is sufficient for a package that does not exist on PyPI yet) with:
-
-- Owner: `envs-net`
-- Repository: `envs-xmpp-core`
+- PyPI project: `envs-xmpp`
+- GitHub owner: `envs-net`
+- Repository: `envs-xmpp`
 - Workflow: `release.yml`
 - Environment: `pypi`
-- PyPI project name: `envs-xmpp-core`
-
-The first successful trusted publication can create the PyPI project.
-

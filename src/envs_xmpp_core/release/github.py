@@ -1,4 +1,5 @@
 """GitHub latest-release helpers with injectable transport."""
+
 from __future__ import annotations
 
 import json
@@ -89,7 +90,7 @@ def fetch_latest_release_version_sync(
         return fetch_latest_release_version_via_github_api_sync(
             release_url, user_agent=user_agent, timeout=timeout, urlopen=urlopen
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - any API failure should fall back to redirect lookup
         return fetch_latest_release_version_via_redirect_sync(
             release_url, user_agent=user_agent, timeout=timeout, urlopen=urlopen
         )

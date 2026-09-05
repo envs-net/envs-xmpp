@@ -1,19 +1,27 @@
 """AST-based, atomic updates for simple Python config assignments."""
+
 from __future__ import annotations
+
 import ast
 from pathlib import Path
 from typing import Any
-from .literals import render_assignment
+
 from envs_xmpp_core.storage.files import atomic_write_text
+
+from .literals import render_assignment
 
 
 def assignment_span(text: str, name: str, *, filename: str = "<config>") -> tuple[int, int]:
     tree = ast.parse(text, filename=filename)
     matches: list[ast.stmt] = []
     for node in tree.body:
-        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
-            matches.append(node)
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+        is_assignment = isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == name for target in node.targets
+        )
+        is_annotated_assignment = (
+            isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name
+        )
+        if is_assignment or is_annotated_assignment:
             matches.append(node)
     if len(matches) != 1:
         raise ValueError(f"expected exactly one assignment for {name}, found {len(matches)}")

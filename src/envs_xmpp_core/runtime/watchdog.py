@@ -1,4 +1,5 @@
 """Generic event-loop/systemd watchdog."""
+
 from __future__ import annotations
 
 import asyncio
@@ -6,8 +7,9 @@ import inspect
 import logging
 import os
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from .systemd import sd_notify, systemd_watchdog_interval
 from .tasks import TaskSupervisor
@@ -145,21 +147,14 @@ class RuntimeWatchdog:
         if not callable(cancel_scope) and supervisor is not None:
             cancel_scope = getattr(supervisor, "cancel_group", None)
 
-        if (
-            task is not None
-            and callable(owns)
-            and owns(task)
-            and callable(cancel_scope)
-        ):
+        if task is not None and callable(owns) and owns(task) and callable(cancel_scope):
             await cancel_scope("_runtime", timeout=5.0)
         else:
             for running in (task, alert_task):
                 if running is not None and not running.done():
                     running.cancel()
             awaitables = [
-                running
-                for running in (task, alert_task)
-                if running is not None and inspect.isawaitable(running)
+                running for running in (task, alert_task) if running is not None and inspect.isawaitable(running)
             ]
             if awaitables:
                 await asyncio.gather(*awaitables, return_exceptions=True)
@@ -224,7 +219,9 @@ class RuntimeWatchdog:
             self.supervisor.heartbeat("_runtime", "runtime-watchdog")
         if lag >= failure_threshold:
             self.state.heartbeat_suppressed += 1
-            self.notifier(f"STATUS={self.service_name} unhealthy: event-loop lag {lag:.3f}s; watchdog heartbeat suppressed")
+            self.notifier(
+                f"STATUS={self.service_name} unhealthy: event-loop lag {lag:.3f}s; watchdog heartbeat suppressed"
+            )
             return
         payload = f"WATCHDOG=1\nSTATUS={self.service_name} healthy; event-loop lag {lag:.3f}s"
         if self.notifier(payload):

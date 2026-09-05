@@ -27,7 +27,10 @@ def test_version_semantics():
 
 
 def test_github_helpers():
-    assert github_api_url_from_release_url("https://github.com/envs-net/envsbot/releases/latest") == "https://api.github.com/repos/envs-net/envsbot/releases/latest"
+    assert (
+        github_api_url_from_release_url("https://github.com/envs-net/envsbot/releases/latest")
+        == "https://api.github.com/repos/envs-net/envsbot/releases/latest"
+    )
     assert release_tag_from_redirect_url("https://github.com/envs-net/envsbot/releases/tag/v1.2.3") == "1.2.3"
 
 
@@ -54,6 +57,7 @@ def test_connection_signature_compatibility():
     class AddressClient:
         def connect(self, address=None, use_ssl=False, force_starttls=True):
             return True
+
     kwargs = connect_kwargs(AddressClient(), host="example.org", port=5223, direct_tls=True)
     assert kwargs == {"address": ("example.org", 5223), "use_ssl": True, "force_starttls": False}
 
@@ -62,11 +66,14 @@ def test_stanza_helpers():
     class Plugin:
         def get(self, key):
             return {"jid": "room@example.org"}.get(key)
+
     class Stanza:
         def get_plugin(self, name, check=True):
             return Plugin() if name == "muc" else None
+
     plugin = safe_get_plugin(Stanza(), "muc")
     assert safe_plugin_value(plugin, "jid") == "room@example.org"
+
 
 @pytest.mark.asyncio
 async def test_join_muc_with_timeout_cleans_up_timed_out_membership():
@@ -117,6 +124,7 @@ async def test_watchdog_can_defer_ready_by_one_loop_turn():
     await asyncio.sleep(0)
     assert runtime.ready_sent is True
     assert notifications == ["READY=1\nSTATUS=test startup complete"]
+
 
 @pytest.mark.asyncio
 async def test_watchdog_options_provider_is_read_at_start(monkeypatch):

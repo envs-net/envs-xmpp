@@ -19,11 +19,7 @@ class SQLiteIntegrityResult:
 
     @property
     def ok(self) -> bool:
-        return (
-            self.error is None
-            and self.integrity == ("ok",)
-            and not self.foreign_key_violations
-        )
+        return self.error is None and self.integrity == ("ok",) and not self.foreign_key_violations
 
     @property
     def message(self) -> str:
@@ -70,21 +66,15 @@ def check_sqlite_integrity(
     try:
         connection = sqlite3.connect(f"file:{resolved}?mode=ro", uri=True)
         try:
-            integrity = tuple(
-                str(row[0])
-                for row in connection.execute("PRAGMA integrity_check;").fetchall()
-            )
+            integrity = tuple(str(row[0]) for row in connection.execute("PRAGMA integrity_check;").fetchall())
             foreign_keys = (
-                tuple(
-                    tuple(row)
-                    for row in connection.execute("PRAGMA foreign_key_check;").fetchall()
-                )
+                tuple(tuple(row) for row in connection.execute("PRAGMA foreign_key_check;").fetchall())
                 if check_foreign_keys
                 else ()
             )
         finally:
             connection.close()
-    except Exception as exc:
+    except sqlite3.Error as exc:
         return SQLiteIntegrityResult(path=resolved, error=str(exc))
 
     return SQLiteIntegrityResult(

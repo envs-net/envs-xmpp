@@ -1,8 +1,11 @@
 """Slixmpp connection signature compatibility helpers."""
+
 from __future__ import annotations
+
 import inspect
 from collections.abc import Mapping
 from typing import Any
+
 from .jid import boundjid_domain, configured_jid_domain
 
 
@@ -56,7 +59,13 @@ def connect_kwargs_from_mapping(
     )
 
 
-def connection_target(kwargs: Mapping[str, Any], *, fallback_host: object = "auto", fallback_port: object = "auto", direct_tls: bool = False) -> tuple[object, object, str]:
+def connection_target(
+    kwargs: Mapping[str, Any],
+    *,
+    fallback_host: object = "auto",
+    fallback_port: object = "auto",
+    direct_tls: bool = False,
+) -> tuple[object, object, str]:
     address = kwargs.get("address") or (None, None)
     host = kwargs.get("host") or address[0] or fallback_host
     port = kwargs.get("port") or address[1] or fallback_port

@@ -3,14 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "envs-xmpp-core"
-version = "0.1.2"
+name = "envs-xmpp"
+version = "0.2.0"
 readme = "README.md"
-description = "Shared runtime primitives for envs.net XMPP bots"
+description = "Shared runtime and deployment primitives for envs.net XMPP bots"
 requires-python = ">=3.12"
 license = "GPL-3.0-only"
 authors = [{name = "~creme", email = "creme@envs.net"}]
-dependencies = ["slixmpp>=1.8,<2"]
 classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -27,8 +26,8 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/envs-net/envs-xmpp-core"
-Issues = "https://github.com/envs-net/envs-xmpp-core/issues"
+Repository = "https://github.com/envs-net/envs-xmpp"
+Issues = "https://github.com/envs-net/envs-xmpp/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -36,6 +35,9 @@ where = ["src"]
 [tool.ruff]
 target-version = "py312"
 line-length = 120
+
+[tool.ruff.lint]
+extend-select = ["I", "UP", "B", "SIM", "BLE"]
 
 [tool.mypy]
 python_version = "3.12"

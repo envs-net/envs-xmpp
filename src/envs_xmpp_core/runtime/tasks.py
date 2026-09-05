@@ -1,4 +1,5 @@
 """Neutral background task supervision primitives."""
+
 from __future__ import annotations
 
 import asyncio
@@ -7,15 +8,16 @@ import logging
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, TypeAlias, cast
+from typing import Any, cast
 
 log = logging.getLogger(__name__)
 _COMPLETED_ONE_SHOT_HISTORY_LIMIT = 50
-CircuitCallback: TypeAlias = Callable[[str, str, str], Awaitable[None] | None]
+type CircuitCallback = Callable[[str, str, str], Awaitable[None] | None]
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
+
 
 def _datetime_from_timestamp(value: float) -> datetime:
     return datetime.fromtimestamp(value, tz=UTC)
@@ -38,8 +40,10 @@ class SupervisorOptions:
     yield_before_start: bool = True
     terminal_error_style: str = "circuit"
 
+
 class ExpectedTaskExit(Exception):
     """Signal an intentional service-task exit outside process shutdown."""
+
 
 @dataclass(frozen=True)
 class TaskInfo:
@@ -55,6 +59,7 @@ class TaskInfo:
     circuit_state: str = "closed"
     next_restart_at: str | None = None
     kind: str = "one-shot"
+
 
 class TaskSupervisor:
     """Track scope background tasks and cancel them on unload/shutdown."""
@@ -212,12 +217,8 @@ class TaskSupervisor:
                     error = str(meta["last_error"] or "unknown error")
                     await self._notify_circuit_open(scope, name, error)
                     if self.options.terminal_error_style == "restart_limit":
-                        raise RuntimeError(
-                            f"background service {name} exceeded restart limit: {error}"
-                        ) from exc
-                    raise RuntimeError(
-                        f"task circuit open after {restart_limit} restart(s): {error}"
-                    ) from exc
+                        raise RuntimeError(f"background service {name} exceeded restart limit: {error}") from exc
+                    raise RuntimeError(f"task circuit open after {restart_limit} restart(s): {error}") from exc
                 delay = min(
                     max_backoff,
                     initial_backoff * (2 ** max(0, consecutive - 1)),
@@ -287,10 +288,7 @@ class TaskSupervisor:
         completed = [
             task
             for task, meta in self._tasks.items()
-            if task.done()
-            and not task.cancelled()
-            and meta.get("kind") != "service"
-            and meta.get("last_error") is None
+            if task.done() and not task.cancelled() and meta.get("kind") != "service" and meta.get("last_error") is None
         ]
         excess = len(completed) - _COMPLETED_ONE_SHOT_HISTORY_LIMIT
         for task in completed[: max(0, excess)]:
@@ -360,7 +358,7 @@ class TaskSupervisor:
                 if heartbeat.tzinfo is None:
                     heartbeat = heartbeat.replace(tzinfo=UTC)
                 age = (now - heartbeat.astimezone(UTC)).total_seconds()
-            except Exception:
+            except ValueError:
                 age = max_age_seconds + 1
             if age > max_age_seconds:
                 stale.append(info)
@@ -426,11 +424,7 @@ class TaskSupervisor:
         Returns:
             Number of running tasks that were requested to cancel.
         """
-        scope_tasks = [
-            task
-            for task, meta in tuple(self._tasks.items())
-            if meta.get("scope") == scope
-        ]
+        scope_tasks = [task for task, meta in tuple(self._tasks.items()) if meta.get("scope") == scope]
         running_tasks = [task for task in scope_tasks if not task.done()]
         for task in running_tasks:
             task.cancel()
@@ -470,9 +464,7 @@ class TaskSupervisor:
         failed_tasks = [
             task
             for task, meta in tuple(self._tasks.items())
-            if meta.get("scope") == scope
-            and task.done()
-            and meta.get("last_error") is not None
+            if meta.get("scope") == scope and task.done() and meta.get("last_error") is not None
         ]
         for task in failed_tasks:
             self._forget_task(task)
@@ -545,11 +537,7 @@ class TaskSupervisor:
             elif info.status == "cancelled":
                 counts["cancelled"] += 1
             elif info.status == "running":
-                key = (
-                    "services_running"
-                    if info.kind == "service"
-                    else "one_shots_running"
-                )
+                key = "services_running" if info.kind == "service" else "one_shots_running"
                 counts[key] += 1
             elif info.kind == "service":
                 counts["services_finished"] += 1

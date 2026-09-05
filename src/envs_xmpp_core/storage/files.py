@@ -1,5 +1,7 @@
 """Safe filesystem primitives for bot state and configuration."""
+
 from __future__ import annotations
+
 import hashlib
 import os
 import tempfile
@@ -52,7 +54,7 @@ def atomic_write_text(path: str | Path, text: str, *, mode: int = 0o600, encodin
         os.replace(tmp, target)
         os.chmod(target, mode)
         fsync_directory(target.parent)
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - cleanup must also run for cancellation/system exit
         try:
             tmp.unlink(missing_ok=True)
         finally:

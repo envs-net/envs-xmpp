@@ -1,11 +1,15 @@
 """Tracked MUC join compatibility and timeout cleanup helpers."""
+
 from __future__ import annotations
+
 import asyncio
 import inspect
 from typing import Any
 
 
-def start_muc_join_task(muc_plugin: Any, room: str, nick: str, *, timeout: float, join_kwargs: dict[str, Any] | None = None) -> tuple[asyncio.Future[Any] | asyncio.Task[Any] | None, str]:
+def start_muc_join_task(
+    muc_plugin: Any, room: str, nick: str, *, timeout: float, join_kwargs: dict[str, Any] | None = None
+) -> tuple[asyncio.Future[Any] | asyncio.Task[Any] | None, str]:
     join_wait = getattr(muc_plugin, "join_muc_wait", None)
     kwargs = dict(join_kwargs or {})
     if callable(join_wait):
@@ -35,15 +39,17 @@ async def drain_task(task: asyncio.Future[Any] | asyncio.Task[Any] | None, *, ca
         await task
     except asyncio.CancelledError:
         return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - Slixmpp/plugin failures are returned to callers
         return exc
     return None
 
 
-async def await_muc_join_compat(muc_plugin: Any, room: str, nick: str, *, timeout: float) -> tuple[bool, str, Exception | None]:
+async def await_muc_join_compat(
+    muc_plugin: Any, room: str, nick: str, *, timeout: float
+) -> tuple[bool, str, Exception | None]:
     try:
         task, api_name = start_muc_join_task(muc_plugin, room, nick, timeout=timeout)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - plugin API failures are part of the compatibility result
         return False, "unknown", exc
     if task is None:
         return True, api_name, None
@@ -51,7 +57,7 @@ async def await_muc_join_compat(muc_plugin: Any, room: str, nick: str, *, timeou
         await asyncio.wait_for(task, timeout=max(float(timeout), 0.1))
     except asyncio.CancelledError:
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - preserve arbitrary join failures for bot-specific handling
         if not task.done():
             task.cancel()
         await drain_task(task)
@@ -86,7 +92,7 @@ async def join_muc_with_timeout(
                 leave_result = muc_plugin.leave_muc(room, nick)
                 if inspect.isawaitable(leave_result):
                     await leave_result
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - cleanup is explicitly best-effort
                 # Cleanup is best-effort; the join timeout remains the primary
                 # error and callers decide how to log or retry it.
                 if callable(on_cleanup_error):

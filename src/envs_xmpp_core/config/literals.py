@@ -1,5 +1,7 @@
 """Safe parsing/rendering of Python configuration literals."""
+
 from __future__ import annotations
+
 import ast
 from typing import Any
 

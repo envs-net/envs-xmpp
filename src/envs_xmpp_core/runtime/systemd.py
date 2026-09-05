@@ -1,4 +1,5 @@
 """Minimal systemd notification helpers without python-systemd."""
+
 from __future__ import annotations
 
 import logging

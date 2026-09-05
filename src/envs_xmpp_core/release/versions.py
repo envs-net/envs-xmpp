@@ -1,5 +1,7 @@
 """Deterministic version comparison for release tags."""
+
 from __future__ import annotations
+
 import re
 
 
@@ -21,7 +23,9 @@ def _trim_release_zeros(parts: tuple[int, ...]) -> tuple[int, ...]:
 
 def version_sort_key(version: str) -> tuple[tuple[int, ...], int, int] | None:
     value = normalize_version(version).strip().lower()
-    match = re.fullmatch(r"(?P<release>\d+(?:\.\d+)*)(?:[-_.]?(?P<label>a|alpha|b|beta|rc)[-_.]?(?P<number>\d*))?(?:[+.-].*)?", value)
+    match = re.fullmatch(
+        r"(?P<release>\d+(?:\.\d+)*)(?:[-_.]?(?P<label>a|alpha|b|beta|rc)[-_.]?(?P<number>\d*))?(?:[+.-].*)?", value
+    )
     if match is None:
         return None
     release = _trim_release_zeros(tuple(int(part) for part in match.group("release").split(".")))

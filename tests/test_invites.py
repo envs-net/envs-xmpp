@@ -25,8 +25,7 @@ class Stanza(dict):
 
 def test_direct_xml_invite_is_normalized() -> None:
     xml = ET.fromstring(
-        "<message><x xmlns='jabber:x:conference' "
-        "jid='Room@Conference.Example' reason=' join '/></message>"
+        "<message><x xmlns='jabber:x:conference' jid='Room@Conference.Example' reason=' join '/></message>"
     )
     invite = extract_room_invite(Stanza("Alice@Example.Org/Phone", xml=xml))
     assert invite == RoomInvite(
@@ -68,17 +67,13 @@ def test_plugin_fallback_supports_mediated_and_direct_invites() -> None:
             )
         },
     )
-    assert extract_room_invite(mediated) == RoomInvite(
-        "room@conference.example", "alice@example.org", "mediated"
-    )
+    assert extract_room_invite(mediated) == RoomInvite("room@conference.example", "alice@example.org", "mediated")
 
     direct = Stanza(
         "Alice@Example.Org/Phone",
         plugins={"groupchat_invite": {"jid": "Direct@Conference.Example", "reason": "direct"}},
     )
-    assert extract_room_invite(direct) == RoomInvite(
-        "direct@conference.example", "alice@example.org", "direct"
-    )
+    assert extract_room_invite(direct) == RoomInvite("direct@conference.example", "alice@example.org", "direct")
 
 
 def test_inviter_reason_and_expiry_helpers() -> None:
@@ -86,9 +81,7 @@ def test_inviter_reason_and_expiry_helpers() -> None:
     assert inviter_from_attr("Alice@Example.Org/Phone", "room@conference") == "alice@example.org"
     assert inviter_from_attr(None) == ""
 
-    element = ET.fromstring(
-        "<invite xmlns='http://jabber.org/protocol/muc#user'><reason> hello </reason></invite>"
-    )
+    element = ET.fromstring("<invite xmlns='http://jabber.org/protocol/muc#user'><reason> hello </reason></invite>")
     assert reason_from_invite_element(element) == "hello"
     assert invite_is_expired(100, 1, now=100 + 86400 + 1) is True
     assert invite_is_expired(100, 0, now=999999) is False

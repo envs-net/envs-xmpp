@@ -122,11 +122,7 @@ def room_invite_from_direct_plugin(
     if direct is None:
         return None
 
-    room_jid = (
-        plugin_value(direct, "jid")
-        or plugin_value(direct, "room")
-        or plugin_value(direct, "to")
-    ).lower()
+    room_jid = (plugin_value(direct, "jid") or plugin_value(direct, "room") or plugin_value(direct, "to")).lower()
     if not room_jid:
         return None
 

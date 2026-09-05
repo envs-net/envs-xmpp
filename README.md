@@ -90,3 +90,15 @@ token.
 
 PyPI publishing is configured through the `pypi` GitHub environment and the
 Trusted Publisher for `envs-net/envs-xmpp` using `.github/workflows/release.yml`.
+
+## Shared developer quality runners
+
+`envs_xmpp_ops.quality` and `envs_xmpp_ops.testing` provide the common local
+quality/test frontends used by envsbot and muc_banbot. Project-specific source
+targets, generated-file checks, integration markers and coverage floors remain
+declarative in each repository's `pyproject.toml`; the runner behavior and gate
+ordering stay shared.
+
+The quality runner enforces a common baseline: compilation, project validation,
+warning-strict tests, Ruff repository/F401/I-UP-B gates, mypy, Git whitespace
+validation and dependency audit.

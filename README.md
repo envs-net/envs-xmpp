@@ -24,9 +24,9 @@ logic, plugin systems or bot-specific lifecycle policy.
 The bots themselves remain responsible for dependencies such as Slixmpp.
 
 Shared storage primitives include SQLite integrity checking and safe ZIP member
-validation/streaming. Pending room invites use a shared typed model, deduplication and store
-state machine while each bot keeps only its database adapter and bot-specific
-notification/join policy.
+validation/streaming. Pending room invites use a shared typed model, deduplication, store
+state machine and SQL repository while each bot keeps only a thin database-API adapter and
+bot-specific notification/join policy.
 Pagination provides a neutral page-slice model while bot frontends retain their
 existing command-specific return formats.
 

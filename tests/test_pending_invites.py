@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Sequence
 
 import pytest
 
 from envs_xmpp_core.xmpp.pending_invites import (
     PendingRoomInvite,
+    PendingRoomInviteSqlRepository,
     PendingRoomInviteStore,
     PendingRoomInviteStoreResult,
 )
@@ -258,3 +260,80 @@ async def test_cleanup_expired_uses_memory_state_without_repository() -> None:
     removed = await store.cleanup_expired(max_age_days=1, now=100_100)
     assert removed == 1
     assert list(store.pending) == [2]
+
+
+class FakeSqlBackend:
+    def __init__(self) -> None:
+        self.enabled = True
+        self.connection = sqlite3.connect(":memory:")
+        self.labels: list[str] = []
+
+    def available(self) -> bool:
+        return self.enabled
+
+    async def execute(self, query, params=(), *, label: str = "room_invites") -> int:
+        self.labels.append(label)
+        cursor = self.connection.execute(query, tuple(params))
+        self.connection.commit()
+        rowcount = cursor.rowcount
+        return rowcount if rowcount is not None and rowcount >= 0 else 0
+
+    async def fetch_one(self, query, params=()):
+        return self.connection.execute(query, tuple(params)).fetchone()
+
+    async def fetch_all(self, query, params=()):
+        return self.connection.execute(query, tuple(params)).fetchall()
+
+
+@pytest.mark.asyncio
+async def test_shared_sql_repository_owns_schema_and_crud() -> None:
+    backend = FakeSqlBackend()
+    repository = PendingRoomInviteSqlRepository(backend)
+
+    await repository.setup()
+    first = await repository.insert_if_absent(
+        "Room@Conf",
+        "Alice@Example.Org",
+        "first",
+        100,
+    )
+    duplicate = await repository.insert_if_absent(
+        "Room@Conf",
+        "Alice@Example.Org",
+        "ignored",
+        200,
+    )
+
+    assert first.created is True
+    assert duplicate.created is False
+    assert duplicate.invite == first.invite
+    assert duplicate.invite.reason == "first"
+    assert duplicate.invite.created_at == 100
+    assert await repository.get(first.invite.id) == first.invite
+    assert await repository.load_all() == [first.invite]
+    assert "room_invites_init" in backend.labels
+    assert "room_invite_store" in backend.labels
+
+    assert await repository.delete_many([first.invite.id]) == 1
+    assert await repository.load_all() == []
+
+    second = await repository.insert_if_absent("second@conf", "bob@example.org", "", 300)
+    assert second.created is True
+    assert await repository.clear() == 1
+    assert await repository.load_all() == []
+
+
+@pytest.mark.asyncio
+async def test_shared_sql_repository_respects_unavailable_backend() -> None:
+    backend = FakeSqlBackend()
+    backend.enabled = False
+    repository = PendingRoomInviteSqlRepository(backend)
+
+    await repository.setup()
+    assert await repository.load_all() == []
+    assert await repository.get(1) is None
+    assert await repository.delete(1) == 0
+    assert await repository.delete_many([1]) == 0
+    assert await repository.clear() == 0
+    with pytest.raises(RuntimeError, match="database is unavailable"):
+        await repository.insert_if_absent("room@conf", "a@example.org", "", 1)

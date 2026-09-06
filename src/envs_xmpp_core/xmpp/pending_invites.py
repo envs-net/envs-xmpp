@@ -1,8 +1,8 @@
 """Persistent pending-room-invite state shared by envs.net XMPP bots.
 
 The core owns the normalized model, cache/index bookkeeping, expiry handling,
-deduplication and store orchestration. Database-specific SQL execution remains
-behind a tiny repository adapter implemented by each application.
+deduplication, store orchestration and the SQLite-style repository. Each
+application only adapts its own database API through a tiny SQL backend.
 """
 
 from __future__ import annotations
@@ -123,6 +123,173 @@ class PendingRoomInviteStoreResult:
 
     invite: PendingRoomInvite
     created: bool
+
+
+_CREATE_PENDING_INVITES_TABLE = """
+CREATE TABLE IF NOT EXISTS room_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_jid TEXT NOT NULL,
+    inviter TEXT NOT NULL,
+    reason TEXT,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    UNIQUE(room_jid, inviter)
+)
+"""
+_CREATE_PENDING_INVITES_CREATED_AT_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_room_invites_created_at "
+    "ON room_invites(created_at)"
+)
+_SELECT_PENDING_INVITES = """
+SELECT id, room_jid, inviter, reason, created_at
+FROM room_invites
+ORDER BY id ASC
+"""
+_SELECT_PENDING_INVITE_BY_KEY = """
+SELECT id, room_jid, inviter, reason, created_at
+FROM room_invites
+WHERE room_jid = ? AND inviter = ?
+"""
+_SELECT_PENDING_INVITE_BY_ID = """
+SELECT id, room_jid, inviter, reason, created_at
+FROM room_invites
+WHERE id = ?
+"""
+_INSERT_PENDING_INVITE = """
+INSERT INTO room_invites (room_jid, inviter, reason, created_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(room_jid, inviter) DO NOTHING
+"""
+
+
+class PendingRoomInviteSqlBackend(Protocol):
+    """Minimal async SQL backend needed by the shared invite repository."""
+
+    def available(self) -> bool:
+        """Return whether database access is currently usable."""
+        ...
+
+    async def execute(
+        self,
+        query: str,
+        params: Sequence[Any] = (),
+        *,
+        label: str = "room_invites",
+    ) -> int:
+        """Execute a write/DDL statement and return affected rows when known."""
+        ...
+
+    async def fetch_one(
+        self,
+        query: str,
+        params: Sequence[Any] = (),
+    ) -> Sequence[Any] | None:
+        """Fetch one row or ``None``."""
+        ...
+
+    async def fetch_all(
+        self,
+        query: str,
+        params: Sequence[Any] = (),
+    ) -> Sequence[Sequence[Any]]:
+        """Fetch every matching row."""
+        ...
+
+
+class PendingRoomInviteSqlRepository:
+    """Shared SQLite-style repository for pending room invites.
+
+    Applications only adapt their database API to
+    :class:`PendingRoomInviteSqlBackend`; schema and CRUD SQL stay centralized
+    here so both bots use exactly the same persistence semantics.
+    """
+
+    def __init__(self, backend: PendingRoomInviteSqlBackend) -> None:
+        self.backend = backend
+
+    def available(self) -> bool:
+        return self.backend.available()
+
+    async def setup(self) -> None:
+        if not self.available():
+            return
+        await self.backend.execute(
+            _CREATE_PENDING_INVITES_TABLE,
+            label="room_invites_init",
+        )
+        await self.backend.execute(
+            _CREATE_PENDING_INVITES_CREATED_AT_INDEX,
+            label="room_invites_init",
+        )
+
+    async def load_all(self) -> list[PendingRoomInvite]:
+        if not self.available():
+            return []
+        rows = await self.backend.fetch_all(_SELECT_PENDING_INVITES)
+        return [PendingRoomInvite.from_row(row) for row in rows]
+
+    async def insert_if_absent(
+        self,
+        room_jid: str,
+        inviter: str,
+        reason: str,
+        created_at: int,
+    ) -> PendingRoomInviteStoreResult:
+        if not self.available():
+            raise RuntimeError("room invite database is unavailable")
+        affected = await self.backend.execute(
+            _INSERT_PENDING_INVITE,
+            (room_jid, inviter, reason, created_at),
+            label="room_invite_store",
+        )
+        row = await self.backend.fetch_one(
+            _SELECT_PENDING_INVITE_BY_KEY,
+            (room_jid, inviter),
+        )
+        if row is None:
+            raise RuntimeError(
+                f"could not reload stored room invite for {room_jid} from {inviter}"
+            )
+        return PendingRoomInviteStoreResult(
+            PendingRoomInvite.from_row(row),
+            created=affected == 1,
+        )
+
+    async def get(self, invite_id: int) -> PendingRoomInvite | None:
+        if not self.available():
+            return None
+        row = await self.backend.fetch_one(
+            _SELECT_PENDING_INVITE_BY_ID,
+            (int(invite_id),),
+        )
+        return PendingRoomInvite.from_row(row) if row is not None else None
+
+    async def delete(self, invite_id: int) -> int:
+        if not self.available():
+            return 0
+        return await self.backend.execute(
+            "DELETE FROM room_invites WHERE id = ?",
+            (int(invite_id),),
+            label="room_invite_delete",
+        )
+
+    async def delete_many(self, invite_ids: Sequence[int]) -> int:
+        ids = [int(invite_id) for invite_id in invite_ids]
+        if not ids or not self.available():
+            return 0
+        placeholders = ",".join("?" for _ in ids)
+        return await self.backend.execute(
+            f"DELETE FROM room_invites WHERE id IN ({placeholders})",
+            ids,
+            label="room_invites_expire",
+        )
+
+    async def clear(self) -> int:
+        if not self.available():
+            return 0
+        return await self.backend.execute(
+            "DELETE FROM room_invites",
+            label="room_invites_clear",
+        )
 
 
 class PendingRoomInviteRepository(Protocol):

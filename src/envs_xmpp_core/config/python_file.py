@@ -3,12 +3,58 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from envs_xmpp_core.storage.files import atomic_write_text
 
 from .literals import render_assignment
+
+
+@dataclass(frozen=True, slots=True)
+class PythonConfigEdit:
+    """Prepared atomic edit for one Python configuration file."""
+
+    path: Path
+    original_text: str
+    updated_text: str
+    mode: int = 0o600
+    encoding: str = "utf-8"
+
+    def write(self) -> None:
+        """Persist the prepared candidate atomically."""
+        atomic_write_text(
+            self.path,
+            self.updated_text,
+            mode=self.mode,
+            encoding=self.encoding,
+        )
+
+    def rollback(self) -> None:
+        """Restore the exact source text captured while preparing the edit."""
+        atomic_write_text(
+            self.path,
+            self.original_text,
+            mode=self.mode,
+            encoding=self.encoding,
+        )
+
+
+class ConfigFileTransactionError(RuntimeError):
+    """A config-file write/apply failed after a rollback was attempted."""
+
+    def __init__(
+        self,
+        phase: Literal["write", "apply"],
+        error: Exception,
+        rollback_errors: tuple[BaseException, ...] = (),
+    ) -> None:
+        self.phase = phase
+        self.error = error
+        self.rollback_errors = rollback_errors
+        super().__init__(str(error))
 
 
 def assignment_span(text: str, name: str, *, filename: str = "<config>") -> tuple[int, int]:
@@ -113,3 +159,78 @@ def replace_or_append_assignment_text(
     result = result + "\n" if had_trailing_newline or not result.endswith("\n") else result
     compile(result, filename, "exec")
     return result
+
+
+def prepare_assignment_edit(
+    path: str | Path,
+    name: str,
+    assignment: str,
+    *,
+    section_comment: str = "# Runtime config edits",
+    mode: int = 0o600,
+    encoding: str = "utf-8",
+) -> PythonConfigEdit:
+    """Read and prepare one validated assignment edit without touching disk."""
+    target = Path(path)
+    original = target.read_text(encoding=encoding)
+    updated = replace_or_append_assignment_text(
+        original,
+        name,
+        assignment,
+        section_comment=section_comment,
+        filename=str(target),
+    )
+    return PythonConfigEdit(
+        path=target,
+        original_text=original,
+        updated_text=updated,
+        mode=mode,
+        encoding=encoding,
+    )
+
+
+async def _rollback_config_edit(
+    edit: PythonConfigEdit,
+    rollback_apply: Callable[[bool], Awaitable[None]] | None,
+) -> tuple[BaseException, ...]:
+    errors: list[BaseException] = []
+    file_restored = False
+    try:
+        edit.rollback()
+        file_restored = True
+    except BaseException as exc:  # noqa: BLE001 - rollback must report every failure
+        errors.append(exc)
+
+    if rollback_apply is not None:
+        try:
+            await rollback_apply(file_restored)
+        except BaseException as exc:  # noqa: BLE001 - preserve rollback diagnostics
+            errors.append(exc)
+    return tuple(errors)
+
+
+async def apply_config_edit_transaction[T](
+    edit: PythonConfigEdit,
+    *,
+    apply: Callable[[], Awaitable[T]],
+    rollback_apply: Callable[[bool], Awaitable[None]] | None = None,
+) -> T:
+    """Write, apply and automatically roll back one prepared config edit.
+
+    ``apply`` owns bot-specific loading, validation and live application. If the
+    file write or that callback fails, the exact original file is restored.
+    ``rollback_apply`` can then restore in-memory state and is told whether the
+    file rollback itself succeeded.
+    """
+    phase: Literal["write", "apply"] = "write"
+    try:
+        edit.write()
+        phase = "apply"
+        return await apply()
+    except BaseException as exc:
+        rollback_errors = await _rollback_config_edit(edit, rollback_apply)
+        if isinstance(exc, Exception):
+            raise ConfigFileTransactionError(phase, exc, rollback_errors) from exc
+        for rollback_error in rollback_errors:
+            exc.add_note(f"config rollback failure: {rollback_error}")
+        raise

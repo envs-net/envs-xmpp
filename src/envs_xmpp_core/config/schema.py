@@ -9,11 +9,21 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 MISSING = object()
 
 AcceptedType = type | tuple[type, ...]
+
+
+ConfigValueViolation = Literal[
+    "type",
+    "empty",
+    "choice",
+    "minimum",
+    "minimum_exclusive",
+    "maximum",
+]
 
 
 @dataclass(frozen=True)
@@ -67,6 +77,16 @@ def schema_sample_defaults(fields: Mapping[str, ConfigKeySpec]) -> dict[str, Any
         value = field.sample if field.sample is not MISSING else field.default
         if value is not MISSING:
             result[name] = value
+    return result
+
+
+def schema_python_sample_defaults(fields: Mapping[str, ConfigKeySpec]) -> dict[str, Any]:
+    """Return documented sample values keyed by Python config name."""
+    result: dict[str, Any] = {}
+    for field in fields.values():
+        value = field.sample if field.sample is not MISSING else field.default
+        if value is not MISSING:
+            result[field.python_key] = value
     return result
 
 
@@ -176,3 +196,38 @@ def effective_value(value: object, field: ConfigKeySpec) -> object:
     if value is None and field.default is not MISSING:
         return field.default
     return value
+
+
+def schema_value_violation(
+    value: object,
+    field: ConfigKeySpec,
+    *,
+    none_is_valid: bool = True,
+    assume_type_valid: bool = False,
+) -> ConfigValueViolation | None:
+    """Return the first generic schema violation for ``value``.
+
+    The function deliberately returns a symbolic reason instead of user-facing
+    text so each application can preserve its established command/error wording.
+    Bot-specific semantic checks (JIDs, paths, cross-field relationships, and
+    similar policy) remain outside the shared schema layer.
+    """
+
+    if value is None and none_is_valid:
+        return None
+    if not assume_type_valid and not matches_expected_type(value, field.accepted_type):
+        return "type"
+    if isinstance(value, str):
+        if not field.allow_empty and not value.strip():
+            return "empty"
+        if field.choices and value not in field.choices:
+            return "choice"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if field.minimum is not None:
+            if field.minimum_exclusive and value <= field.minimum:
+                return "minimum_exclusive"
+            if not field.minimum_exclusive and value < field.minimum:
+                return "minimum"
+        if field.maximum is not None and value > field.maximum:
+            return "maximum"
+    return None

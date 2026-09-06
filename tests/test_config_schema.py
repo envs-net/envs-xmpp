@@ -96,3 +96,33 @@ def test_effective_value_uses_default_for_none_only_when_declared():
     assert effective_value(5, field) == 5
     missing = ConfigKeySpec(MISSING, "JID", str)
     assert effective_value(None, missing) is None
+
+
+def test_schema_python_sample_defaults_uses_python_names():
+    from envs_xmpp_core.config.schema import schema_python_sample_defaults
+
+    assert schema_python_sample_defaults(FIELDS) == {
+        "JID": "bot@example.org",
+        "PASSWORD": "secret",
+        "LIMIT": 10,
+    }
+
+
+def test_schema_value_violation_reports_generic_constraints():
+    from envs_xmpp_core.config.schema import schema_value_violation
+
+    integer = ConfigKeySpec(10, "LIMIT", int, minimum=1, maximum=20)
+    assert schema_value_violation(True, integer) == "type"
+    assert schema_value_violation(0, integer) == "minimum"
+    assert schema_value_violation(21, integer) == "maximum"
+    assert schema_value_violation(10, integer) is None
+
+    exclusive = ConfigKeySpec(1.0, "DELAY", (int, float), minimum=0, minimum_exclusive=True)
+    assert schema_value_violation(0, exclusive) == "minimum_exclusive"
+
+    choice = ConfigKeySpec("INFO", "LOG_LEVEL", str, choices=("INFO", "DEBUG"))
+    assert schema_value_violation("", choice) == "empty"
+    assert schema_value_violation("TRACE", choice) == "choice"
+    assert schema_value_violation("DEBUG", choice) is None
+    assert schema_value_violation(None, choice) is None
+    assert schema_value_violation(None, choice, none_is_valid=False) == "type"

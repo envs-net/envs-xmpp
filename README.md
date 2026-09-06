@@ -26,9 +26,10 @@ The bots themselves remain responsible for dependencies such as Slixmpp.
 Shared storage primitives include SQLite integrity checking and safe ZIP member
 validation/streaming. Pending room invites use a shared typed model, deduplication, store
 state machine and SQL repository while each bot keeps only a thin database-API adapter and
-bot-specific notification/join policy.
-Pagination provides a neutral page-slice model while bot frontends retain their
-existing command-specific return formats.
+bot-specific notification/join policy. Declarative config-schema primitives provide shared
+default/type/range/lifecycle metadata; each bot keeps its domain-specific validation,
+reload behavior and operator-facing wording local. Pagination provides a neutral page-slice
+model while bot frontends retain their existing command-specific return formats.
 
 ## Development install
 

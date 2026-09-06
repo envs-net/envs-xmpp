@@ -13,6 +13,9 @@ from typing import Any, cast
 log = logging.getLogger(__name__)
 _COMPLETED_ONE_SHOT_HISTORY_LIMIT = 50
 type CircuitCallback = Callable[[str, str, str], Awaitable[None] | None]
+type HeartbeatCallback = Callable[[], Any]
+type SleepCallback = Callable[[float], Awaitable[Any]]
+type WaitForCallback = Callable[..., Awaitable[Any]]
 
 
 def _now() -> str:
@@ -43,6 +46,99 @@ class SupervisorOptions:
 
 class ExpectedTaskExit(Exception):
     """Signal an intentional service-task exit outside process shutdown."""
+
+
+def runtime_is_ready(owner: Any, *, attribute: str = "runtime_ready") -> bool:
+    """Return whether an optional runtime-readiness gate is open.
+
+    Objects without such a gate retain historical immediate behavior, which is
+    useful for lightweight test doubles and applications that do not need a
+    separate startup barrier.
+    """
+    runtime_ready = getattr(owner, attribute, None)
+    if runtime_ready is None:
+        return True
+    is_set = getattr(runtime_ready, "is_set", None)
+    return bool(is_set()) if callable(is_set) else True
+
+
+async def wait_for_runtime_ready(
+    owner: Any,
+    *,
+    heartbeat: HeartbeatCallback | None = None,
+    attribute: str = "runtime_ready",
+) -> None:
+    """Wait for an optional runtime gate and emit one progress heartbeat."""
+    if not runtime_is_ready(owner, attribute=attribute):
+        runtime_ready = getattr(owner, attribute, None)
+        wait = getattr(runtime_ready, "wait", None)
+        if callable(wait):
+            await wait()
+    if heartbeat is not None:
+        heartbeat()
+
+
+def task_heartbeat_interval(
+    stale_after: float | str | None,
+    *,
+    maximum: float = 30.0,
+    default_stale_after: float = 3600.0,
+) -> float:
+    """Return a cadence that remains safely below a task stale threshold."""
+    try:
+        configured = float(stale_after or default_stale_after)
+    except (TypeError, ValueError):
+        configured = float(default_stale_after)
+    safe_maximum = max(0.05, float(maximum))
+    return max(0.05, min(safe_maximum, max(0.05, configured / 2.0)))
+
+
+def _emit_heartbeat(heartbeat: HeartbeatCallback | None) -> None:
+    if heartbeat is not None:
+        heartbeat()
+
+
+async def sleep_with_heartbeat(
+    delay: float,
+    *,
+    heartbeat: HeartbeatCallback | None = None,
+    stale_after: float | str | None = 3600.0,
+    interval: float = 30.0,
+    sleep_func: SleepCallback | None = None,
+) -> None:
+    """Sleep for ``delay`` seconds while periodically signaling progress."""
+    remaining = max(0.0, float(delay))
+    cadence = task_heartbeat_interval(stale_after, maximum=interval)
+    sleeper = sleep_func or asyncio.sleep
+    while remaining > 0:
+        _emit_heartbeat(heartbeat)
+        step = min(remaining, cadence)
+        await sleeper(step)
+        remaining -= step
+
+
+async def wait_for_event_with_heartbeat(
+    event: asyncio.Event,
+    delay: float,
+    *,
+    heartbeat: HeartbeatCallback | None = None,
+    stale_after: float | str | None = 3600.0,
+    interval: float = 30.0,
+    wait_for_func: WaitForCallback | None = None,
+) -> bool:
+    """Wait up to ``delay`` seconds for an event while signaling progress."""
+    remaining = max(0.0, float(delay))
+    cadence = task_heartbeat_interval(stale_after, maximum=interval)
+    wait_for = wait_for_func or asyncio.wait_for
+    while remaining > 0 and not event.is_set():
+        _emit_heartbeat(heartbeat)
+        step = min(remaining, cadence)
+        try:
+            await wait_for(event.wait(), timeout=step)
+            return True
+        except TimeoutError:
+            remaining -= step
+    return event.is_set()
 
 
 @dataclass(frozen=True)
@@ -166,13 +262,12 @@ class TaskSupervisor:
             log.exception("[TASKS] Failed to run circuit-open callback")
 
     async def _sleep_with_heartbeat(self, scope: str, name: str, delay: float) -> None:
-        remaining = max(0.0, float(delay))
-        interval = max(0.05, min(30.0, self.options.stale_after / 2.0))
-        while remaining > 0:
-            self.heartbeat(scope, name)
-            step = min(remaining, interval)
-            await asyncio.sleep(step)
-            remaining -= step
+        await sleep_with_heartbeat(
+            delay,
+            heartbeat=lambda: self.heartbeat(scope, name),
+            stale_after=self.options.stale_after,
+            interval=30.0,
+        )
 
     async def _resilient_runner(
         self,
@@ -345,7 +440,9 @@ class TaskSupervisor:
         """
         now = datetime.now(UTC)
         stale: list[TaskInfo] = []
-        for info in self.snapshot(include_done=False):
+        # Use the neutral snapshot contract even when a compatibility subclass
+        # overrides snapshot() with application-specific datatypes.
+        for info in TaskSupervisor.snapshot(self, include_done=False):
             if info.status != "running":
                 continue
             progress_at = info.heartbeat_at

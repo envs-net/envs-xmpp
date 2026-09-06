@@ -1,3 +1,3 @@
 """Reusable deployment tooling for envs.net XMPP bots."""
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"

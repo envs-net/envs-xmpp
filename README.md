@@ -102,3 +102,8 @@ ordering stay shared.
 The quality runner enforces a common baseline: compilation, project validation,
 warning-strict tests, Ruff repository/F401/I-UP-B gates, mypy, Git whitespace
 validation and dependency audit.
+
+
+## Runtime and utility primitives
+
+The shared core also provides heartbeat-aware worker waits, asynchronous release comparison results, and neutral human-readable duration/byte formatting. Applications keep notification policy and domain-specific labels locally.

@@ -110,4 +110,4 @@ validation and dependency audit.
 
 ## Runtime and utility primitives
 
-The shared core also provides heartbeat-aware worker waits, lifecycle phase orchestration, passive `HealthCheck`/`HealthSnapshot` diagnostics with failure-isolated collection, asynchronous release comparison results, and neutral human-readable duration/byte formatting. Applications keep notification policy, active recovery behavior, concrete health checks and domain-specific labels locally.
+The shared core also provides heartbeat-aware worker waits, lifecycle phase orchestration, passive `HealthCheck`/`HealthSnapshot` diagnostics with failure-isolated collection, normalized task/watchdog/lifecycle diagnostic state, asynchronous release comparison results, and neutral human-readable duration/byte formatting. Applications keep notification policy, active recovery behavior, severity decisions, concrete health checks and domain-specific labels locally.

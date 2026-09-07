@@ -16,3 +16,14 @@ def confirm(
     except EOFError:
         return False
     return answer in {"y", "yes"}
+
+
+def require_confirmation(
+    prompt: str,
+    *,
+    confirm_func: Callable[[str], bool],
+    error_factory: Callable[[str], Exception] = RuntimeError,
+) -> None:
+    """Require explicit operator confirmation or raise a caller-defined error."""
+    if not confirm_func(prompt):
+        raise error_factory("cancelled by operator")

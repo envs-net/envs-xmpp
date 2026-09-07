@@ -29,8 +29,9 @@ from envs_xmpp_ops.git import (
     select_release_remote,
     validate_tag,
 )
-from envs_xmpp_ops.interaction import confirm
-from envs_xmpp_ops.paths import relative_to_root
+from envs_xmpp_ops.interaction import confirm, require_confirmation
+from envs_xmpp_ops.paths import relative_to_root, require_source_tree
+from envs_xmpp_ops.process import quote_command, run_deploy_command
 from envs_xmpp_ops.service import ask_start, stop_active_service
 from envs_xmpp_ops.systemd import (
     install_unit_if_missing,
@@ -38,7 +39,7 @@ from envs_xmpp_ops.systemd import (
     systemctl_exists,
     systemd_property,
 )
-from envs_xmpp_ops.venv import create_venv_if_missing
+from envs_xmpp_ops.venv import create_venv_if_missing, install_editable_checkout
 
 
 def _result(returncode: int = 0, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
@@ -71,6 +72,126 @@ def test_relative_to_root(tmp_path: Path):
     assert relative_to_root(child, root) is True
     assert relative_to_root(outside, root) is False
     assert relative_to_root(None, root) is False
+
+
+def test_require_confirmation_preserves_frontend_error_type():
+    class Cancelled(RuntimeError):
+        pass
+
+    require_confirmation(
+        "Continue",
+        confirm_func=lambda _prompt: True,
+        error_factory=Cancelled,
+    )
+    with pytest.raises(Cancelled, match="cancelled by operator"):
+        require_confirmation(
+            "Continue",
+            confirm_func=lambda _prompt: False,
+            error_factory=Cancelled,
+        )
+
+
+def test_require_source_tree_reports_missing_markers(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=r"not a bot source checkout: .*config_sample.py"):
+        require_source_tree(
+            tmp_path,
+            ("pyproject.toml", "config_sample.py"),
+            project_name="bot",
+        )
+
+
+def test_run_deploy_command_quotes_and_runs_without_shell(tmp_path: Path):
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def run_process(argv: list[str], **kwargs: object):
+        calls.append((argv, kwargs))
+        return _result(stdout="ok\n")
+
+    lines: list[str] = []
+    result = run_deploy_command(
+        ["tool", "value with spaces"],
+        cwd=tmp_path,
+        capture=True,
+        run_process=run_process,
+        print_func=lines.append,
+    )
+
+    assert result.stdout == "ok\n"
+    assert calls[0][0] == ["tool", "value with spaces"]
+    assert calls[0][1]["cwd"] == str(tmp_path)
+    assert lines == ["+ tool 'value with spaces'"]
+    assert quote_command(["tool", "value with spaces"]) == "tool 'value with spaces'"
+
+
+def test_run_deploy_command_switches_root_to_service_user():
+    calls: list[list[str]] = []
+
+    def run_process(argv: list[str], **_kwargs: object):
+        calls.append(argv)
+        return _result()
+
+    class User:
+        def __init__(self, name: str):
+            self.pw_name = name
+
+    run_deploy_command(
+        ["tool"],
+        service_user="bot",
+        announce=False,
+        run_process=run_process,
+        get_euid=lambda: 0,
+        getpwuid=lambda _uid: User("root"),
+        getpwnam=lambda _name: User("bot"),
+        which=lambda command: "/usr/sbin/runuser" if command == "runuser" else None,
+    )
+
+    assert calls == [["runuser", "-u", "bot", "--", "tool"]]
+
+
+def test_run_deploy_command_rejects_wrong_nonroot_user():
+    class User:
+        pw_name = "operator"
+
+    with pytest.raises(RuntimeError, match="run this command as 'bot' or as root"):
+        run_deploy_command(
+            ["tool"],
+            service_user="bot",
+            announce=False,
+            get_euid=lambda: 1000,
+            getpwuid=lambda _uid: User(),
+        )
+
+
+def test_install_editable_checkout_builds_optional_constraint_command(tmp_path: Path):
+    calls: list[tuple[list[object], dict[str, object]]] = []
+    deployment = object()
+
+    def run_command(command: list[object], **kwargs: object):
+        calls.append((command, kwargs))
+
+    install_editable_checkout(
+        pip=tmp_path / "venv/bin/pip",
+        root=tmp_path / "checkout",
+        constraints=tmp_path / "constraints.txt",
+        run_command=run_command,
+        deployment=deployment,
+    )
+
+    assert calls == [
+        (
+            [
+                tmp_path / "venv/bin/pip",
+                "install",
+                "-c",
+                tmp_path / "constraints.txt",
+                "-e",
+                tmp_path / "checkout",
+            ],
+            {"deployment": deployment, "as_service_user": True},
+        )
+    ]
 
 
 def test_git_release_helpers():
@@ -225,6 +346,7 @@ def test_shared_release_approval_policy_handles_downgrade_and_same_release():
     )
     assert any("Already at release" in line for line in lines)
 
+
 def test_install_transaction_runs_common_steps_in_order():
     events: list[str] = []
 
@@ -232,9 +354,7 @@ def test_install_transaction_runs_common_steps_in_order():
         confirm_install=lambda: events.append("confirm"),
         validate_preconditions=lambda: events.append("validate"),
         stop_service=lambda: events.append("stop") or True,
-        apply_install=lambda stopped: (
-            events.append(f"apply:{stopped}") or InstallApplyResult()
-        ),
+        apply_install=lambda stopped: events.append(f"apply:{stopped}") or InstallApplyResult(),
         ask_start=lambda: events.append("start"),
     )
 
@@ -251,10 +371,7 @@ def test_install_transaction_can_pause_for_operator_action_without_starting():
         confirm_install=lambda: events.append("confirm"),
         validate_preconditions=lambda: events.append("validate"),
         stop_service=lambda: events.append("stop") or False,
-        apply_install=lambda stopped: (
-            events.append(f"apply:{stopped}")
-            or InstallApplyResult(ready_for_start=False)
-        ),
+        apply_install=lambda stopped: events.append(f"apply:{stopped}") or InstallApplyResult(ready_for_start=False),
         ask_start=lambda: pytest.fail("paused install must not prompt for start"),
     )
 
@@ -272,9 +389,7 @@ def test_install_transaction_keeps_stopped_service_on_apply_failure(
             confirm_install=lambda: None,
             validate_preconditions=lambda: None,
             stop_service=lambda: True,
-            apply_install=lambda _stopped: (_ for _ in ()).throw(
-                RuntimeError("install failed")
-            ),
+            apply_install=lambda _stopped: (_ for _ in ()).throw(RuntimeError("install failed")),
             ask_start=lambda: pytest.fail("failed install must not prompt for start"),
             failure_message="INSTALL FAILED: service remains stopped.",
         )
@@ -286,13 +401,12 @@ def test_install_transaction_precondition_failure_does_not_stop_service():
     with pytest.raises(RuntimeError, match="missing account"):
         run_install_transaction(
             confirm_install=lambda: None,
-            validate_preconditions=lambda: (_ for _ in ()).throw(
-                RuntimeError("missing account")
-            ),
+            validate_preconditions=lambda: (_ for _ in ()).throw(RuntimeError("missing account")),
             stop_service=lambda: pytest.fail("failed preconditions must not stop service"),
             apply_install=lambda _stopped: pytest.fail("failed preconditions must not install"),
             ask_start=lambda: pytest.fail("failed preconditions must not start"),
         )
+
 
 def test_release_update_transaction_runs_common_steps_and_restores_operator_file(tmp_path: Path):
     root = tmp_path / "checkout"

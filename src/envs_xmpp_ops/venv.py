@@ -45,3 +45,23 @@ def create_venv_if_missing(
         as_service_user=True,
     )
     return True
+
+
+def install_editable_checkout(
+    *,
+    pip: Path,
+    root: Path,
+    run_command: Callable[..., object],
+    deployment: object,
+    constraints: Path | None = None,
+) -> None:
+    """Install one checkout editable, optionally constrained by a lock file."""
+    command: list[object] = [pip, "install"]
+    if constraints is not None:
+        command.extend(("-c", constraints))
+    command.extend(("-e", root))
+    run_command(
+        command,
+        deployment=deployment,
+        as_service_user=True,
+    )

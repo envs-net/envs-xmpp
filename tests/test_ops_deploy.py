@@ -32,7 +32,12 @@ from envs_xmpp_ops.git import (
 from envs_xmpp_ops.interaction import confirm
 from envs_xmpp_ops.paths import relative_to_root
 from envs_xmpp_ops.service import ask_start, stop_active_service
-from envs_xmpp_ops.systemd import service_active, systemctl_exists, systemd_property
+from envs_xmpp_ops.systemd import (
+    install_unit_if_missing,
+    service_active,
+    systemctl_exists,
+    systemd_property,
+)
 from envs_xmpp_ops.venv import create_venv_if_missing
 
 
@@ -484,3 +489,91 @@ def test_create_venv_if_missing_uses_frontend_runner(tmp_path: Path):
             {"deployment": deployment, "as_service_user": True},
         )
     ]
+
+
+def test_systemd_unit_install_preserves_existing_unit(tmp_path: Path):
+    unit = tmp_path / "bot.service"
+    unit.write_text("operator unit\n", encoding="utf-8")
+
+    result = install_unit_if_missing(
+        unit=unit,
+        service="bot.service",
+        render_unit=lambda: pytest.fail("existing unit must not be rendered"),
+        service_exists=lambda: False,
+        confirm=lambda _prompt: pytest.fail("existing unit must not prompt"),
+        run_command=lambda *_args, **_kwargs: pytest.fail("existing unit must not run commands"),
+    )
+
+    assert result.created is False
+    assert result.reason == "existing"
+    assert unit.read_text(encoding="utf-8") == "operator unit\n"
+
+
+def test_systemd_unit_install_can_be_declined_without_rendering(tmp_path: Path):
+    unit = tmp_path / "bot.service"
+
+    result = install_unit_if_missing(
+        unit=unit,
+        service="bot.service",
+        render_unit=lambda: pytest.fail("declined unit must not be rendered"),
+        service_exists=lambda: False,
+        confirm=lambda _prompt: False,
+        run_command=lambda *_args, **_kwargs: pytest.fail("declined unit must not run commands"),
+    )
+
+    assert result.created is False
+    assert result.reason == "declined"
+    assert not unit.exists()
+
+
+def test_systemd_unit_install_verifies_and_reloads(tmp_path: Path):
+    unit = tmp_path / "systemd" / "bot.service"
+    commands: list[list[object]] = []
+
+    def run_command(command: list[object]):
+        commands.append(command)
+        return _result()
+
+    result = install_unit_if_missing(
+        unit=unit,
+        service="bot.service",
+        render_unit=lambda: "[Service]\nExecStart=/bin/true\n",
+        service_exists=lambda: False,
+        confirm=lambda _prompt: True,
+        run_command=run_command,
+        which=lambda command: "/usr/bin/systemd-analyze" if command == "systemd-analyze" else None,
+    )
+
+    assert result.created is True
+    assert result.reason == "created"
+    assert unit.read_text(encoding="utf-8") == "[Service]\nExecStart=/bin/true\n"
+    assert unit.stat().st_mode & 0o777 == 0o644
+    assert commands == [
+        ["systemd-analyze", "verify", unit],
+        ["systemctl", "daemon-reload"],
+    ]
+
+
+def test_systemd_unit_install_removes_invalid_new_unit(tmp_path: Path):
+    unit = tmp_path / "bot.service"
+    errors: list[str] = []
+
+    def run_command(command: list[object]):
+        if command[0] == "systemd-analyze":
+            raise RuntimeError("invalid unit")
+        pytest.fail("daemon-reload must not run after failed verification")
+
+    with pytest.raises(RuntimeError, match="invalid unit"):
+        install_unit_if_missing(
+            unit=unit,
+            service="bot.service",
+            render_unit=lambda: "invalid\n",
+            service_exists=lambda: False,
+            confirm=lambda _prompt: True,
+            run_command=run_command,
+            which=lambda command: "/usr/bin/systemd-analyze" if command == "systemd-analyze" else None,
+            error_func=errors.append,
+        )
+
+    assert not unit.exists()
+    assert errors == [f"REMOVE invalid newly created unit {unit}"]

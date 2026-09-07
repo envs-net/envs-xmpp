@@ -7,7 +7,11 @@ from types import SimpleNamespace
 import pytest
 
 from envs_xmpp_ops.accounts import account_exists
-from envs_xmpp_ops.deploy import backup_checkout_files, restore_checkout_files
+from envs_xmpp_ops.deploy import (
+    backup_checkout_files,
+    restore_checkout_files,
+    run_release_update_transaction,
+)
 from envs_xmpp_ops.git import (
     approve_release_target,
     describe_revision,
@@ -213,6 +217,104 @@ def test_shared_release_approval_policy_handles_downgrade_and_same_release():
         is False
     )
     assert any("Already at release" in line for line in lines)
+
+
+def test_release_update_transaction_runs_common_steps_and_restores_operator_file(tmp_path: Path):
+    root = tmp_path / "checkout"
+    root.mkdir()
+    config = root / "config.py"
+    config.write_text("operator\n", encoding="utf-8")
+    events: list[str] = []
+
+    def checkout(target: str) -> None:
+        events.append(f"checkout:{target}")
+        config.write_text("release\n", encoding="utf-8")
+
+    result = run_release_update_transaction(
+        root=root,
+        prepare_target=lambda: ("origin", "v2.0.0"),
+        approve_target=lambda target: events.append(f"approve:{target}") or True,
+        protected_paths=lambda: {"config": config},
+        stop_service=lambda: events.append("stop") or True,
+        before_checkout=lambda: events.append("before"),
+        checkout_target=checkout,
+        apply_target=lambda target: events.append(f"apply:{target}"),
+        ask_start=lambda: events.append("start"),
+        print_func=lambda line: events.append(f"print:{line}"),
+    )
+
+    assert result.target == "v2.0.0"
+    assert result.changed is True
+    assert result.stopped is True
+    assert config.read_text(encoding="utf-8") == "operator\n"
+    assert events.index("stop") < events.index("before") < events.index("checkout:v2.0.0")
+    assert events.index("checkout:v2.0.0") < events.index("apply:v2.0.0") < events.index("start")
+
+
+def test_release_update_transaction_noop_does_not_stop_or_collect_protected_paths(tmp_path: Path):
+    result = run_release_update_transaction(
+        root=tmp_path,
+        prepare_target=lambda: ("origin", "v1.0.0"),
+        approve_target=lambda _target: False,
+        protected_paths=lambda: pytest.fail("no-op update must not collect protected paths"),
+        stop_service=lambda: pytest.fail("no-op update must not stop the service"),
+        checkout_target=lambda _target: pytest.fail("no-op update must not checkout"),
+        apply_target=lambda _target: pytest.fail("no-op update must not apply"),
+        ask_start=lambda: pytest.fail("no-op update must not start the service"),
+        print_func=lambda _line: None,
+    )
+
+    assert result.changed is False
+    assert result.stopped is False
+
+
+def test_release_update_transaction_restores_protected_file_when_checkout_fails(tmp_path: Path):
+    root = tmp_path / "checkout"
+    root.mkdir()
+    config = root / "config.py"
+    config.write_text("operator\n", encoding="utf-8")
+
+    def failing_checkout(_target: str) -> None:
+        config.write_text("release\n", encoding="utf-8")
+        raise RuntimeError("checkout failed")
+
+    with pytest.raises(RuntimeError, match="checkout failed"):
+        run_release_update_transaction(
+            root=root,
+            prepare_target=lambda: ("origin", "v2.0.0"),
+            approve_target=lambda _target: True,
+            protected_paths=lambda: {"config": config},
+            stop_service=lambda: True,
+            checkout_target=failing_checkout,
+            apply_target=lambda _target: pytest.fail("failed checkout must not apply"),
+            ask_start=lambda: pytest.fail("failed checkout must not start"),
+            print_func=lambda _line: None,
+        )
+
+    assert config.read_text(encoding="utf-8") == "operator\n"
+
+
+def test_release_update_transaction_keeps_stopped_service_on_apply_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    root = tmp_path / "checkout"
+    root.mkdir()
+
+    with pytest.raises(RuntimeError, match="validation failed"):
+        run_release_update_transaction(
+            root=root,
+            prepare_target=lambda: ("origin", "v2.0.0"),
+            approve_target=lambda _target: True,
+            protected_paths=dict,
+            stop_service=lambda: True,
+            checkout_target=lambda _target: None,
+            apply_target=lambda _target: (_ for _ in ()).throw(RuntimeError("validation failed")),
+            ask_start=lambda: pytest.fail("failed update must not start"),
+            failure_message="UPDATE FAILED: service remains stopped.",
+            print_func=lambda _line: None,
+        )
+
+    assert "UPDATE FAILED: service remains stopped." in capsys.readouterr().err
 
 
 def test_checkout_file_backup_restores_only_changed_files(tmp_path: Path):

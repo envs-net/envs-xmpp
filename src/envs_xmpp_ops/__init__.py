@@ -1,3 +1,5 @@
 """Reusable deployment tooling for envs.net XMPP bots."""
 
-__version__ = "0.5.0"
+from envs_xmpp_core import __version__
+
+__all__ = ["__version__"]

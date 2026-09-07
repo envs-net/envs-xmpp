@@ -182,3 +182,16 @@ def test_sqlite_integrity_primitive_validates_missing_file(tmp_path):
     result = check_sqlite_integrity(path, require_nonempty_file=True)
     assert result.ok is False
     assert result.error == f"Database file does not exist: {path.resolve()}"
+
+
+def test_public_package_versions_stay_in_sync() -> None:
+    import tomllib
+    from pathlib import Path
+
+    from envs_xmpp_core import __version__ as core_version
+    from envs_xmpp_ops import __version__ as ops_version
+
+    project = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    )
+    assert core_version == ops_version == project["project"]["version"]

@@ -33,6 +33,22 @@ class ReleaseUpdateResult:
 
 
 @dataclass(frozen=True)
+class InstallApplyResult:
+    """Outcome returned by an application-specific install hook."""
+
+    ready_for_start: bool = True
+
+
+@dataclass(frozen=True)
+class InstallTransactionResult:
+    """Outcome of the shared mutable install transaction."""
+
+    stopped: bool
+    ready_for_start: bool
+    start_prompted: bool
+
+
+@dataclass(frozen=True)
 class ProtectedFileBackup:
     """One temporary backup of an operator-owned file inside a checkout."""
 
@@ -92,6 +108,49 @@ def restore_checkout_files(
         item.path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(item.backup, item.path)
         print_func(f"RESTORE protected {item.label}: {item.path}")
+
+
+def run_install_transaction(
+    *,
+    confirm_install: Callable[[], None],
+    validate_preconditions: Callable[[], None],
+    stop_service: Callable[[], bool],
+    apply_install: Callable[[bool], InstallApplyResult],
+    ask_start: Callable[[], None],
+    failure_message: str | None = None,
+) -> InstallTransactionResult:
+    """Run the shared mutable part of an interactive installation.
+
+    Frontends keep source-tree validation, dry-run rendering and all
+    application-specific install work.  This helper owns the common mutation
+    boundary: confirmation, final preconditions, stopping an active service,
+    executing the install hook, leaving a stopped service stopped on failure,
+    and prompting separately before a successful start.
+
+    ``apply_install`` receives whether this transaction stopped the service.
+    It can return ``ready_for_start=False`` when installation intentionally
+    pauses for operator action, for example after creating a new config file.
+    """
+    confirm_install()
+    validate_preconditions()
+    stopped = stop_service()
+    try:
+        applied = apply_install(stopped)
+    except BaseException:
+        if stopped and failure_message:
+            print(f"\n{failure_message}", file=sys.stderr)
+        raise
+
+    start_prompted = False
+    if applied.ready_for_start:
+        ask_start()
+        start_prompted = True
+
+    return InstallTransactionResult(
+        stopped=stopped,
+        ready_for_start=applied.ready_for_start,
+        start_prompted=start_prompted,
+    )
 
 
 def run_release_update_transaction(

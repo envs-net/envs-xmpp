@@ -8,8 +8,10 @@ import pytest
 
 from envs_xmpp_ops.accounts import account_exists
 from envs_xmpp_ops.deploy import (
+    InstallApplyResult,
     backup_checkout_files,
     restore_checkout_files,
+    run_install_transaction,
     run_release_update_transaction,
 )
 from envs_xmpp_ops.git import (
@@ -218,6 +220,74 @@ def test_shared_release_approval_policy_handles_downgrade_and_same_release():
     )
     assert any("Already at release" in line for line in lines)
 
+def test_install_transaction_runs_common_steps_in_order():
+    events: list[str] = []
+
+    result = run_install_transaction(
+        confirm_install=lambda: events.append("confirm"),
+        validate_preconditions=lambda: events.append("validate"),
+        stop_service=lambda: events.append("stop") or True,
+        apply_install=lambda stopped: (
+            events.append(f"apply:{stopped}") or InstallApplyResult()
+        ),
+        ask_start=lambda: events.append("start"),
+    )
+
+    assert events == ["confirm", "validate", "stop", "apply:True", "start"]
+    assert result.stopped is True
+    assert result.ready_for_start is True
+    assert result.start_prompted is True
+
+
+def test_install_transaction_can_pause_for_operator_action_without_starting():
+    events: list[str] = []
+
+    result = run_install_transaction(
+        confirm_install=lambda: events.append("confirm"),
+        validate_preconditions=lambda: events.append("validate"),
+        stop_service=lambda: events.append("stop") or False,
+        apply_install=lambda stopped: (
+            events.append(f"apply:{stopped}")
+            or InstallApplyResult(ready_for_start=False)
+        ),
+        ask_start=lambda: pytest.fail("paused install must not prompt for start"),
+    )
+
+    assert events == ["confirm", "validate", "stop", "apply:False"]
+    assert result.stopped is False
+    assert result.ready_for_start is False
+    assert result.start_prompted is False
+
+
+def test_install_transaction_keeps_stopped_service_on_apply_failure(
+    capsys: pytest.CaptureFixture[str],
+):
+    with pytest.raises(RuntimeError, match="install failed"):
+        run_install_transaction(
+            confirm_install=lambda: None,
+            validate_preconditions=lambda: None,
+            stop_service=lambda: True,
+            apply_install=lambda _stopped: (_ for _ in ()).throw(
+                RuntimeError("install failed")
+            ),
+            ask_start=lambda: pytest.fail("failed install must not prompt for start"),
+            failure_message="INSTALL FAILED: service remains stopped.",
+        )
+
+    assert "INSTALL FAILED: service remains stopped." in capsys.readouterr().err
+
+
+def test_install_transaction_precondition_failure_does_not_stop_service():
+    with pytest.raises(RuntimeError, match="missing account"):
+        run_install_transaction(
+            confirm_install=lambda: None,
+            validate_preconditions=lambda: (_ for _ in ()).throw(
+                RuntimeError("missing account")
+            ),
+            stop_service=lambda: pytest.fail("failed preconditions must not stop service"),
+            apply_install=lambda _stopped: pytest.fail("failed preconditions must not install"),
+            ask_start=lambda: pytest.fail("failed preconditions must not start"),
+        )
 
 def test_release_update_transaction_runs_common_steps_and_restores_operator_file(tmp_path: Path):
     root = tmp_path / "checkout"

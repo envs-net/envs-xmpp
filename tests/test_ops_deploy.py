@@ -7,15 +7,20 @@ from types import SimpleNamespace
 import pytest
 
 from envs_xmpp_ops.accounts import account_exists
+from envs_xmpp_ops.deploy import backup_checkout_files, restore_checkout_files
 from envs_xmpp_ops.git import (
+    approve_release_target,
     describe_revision,
     git_is_ancestor,
     head_is_detached,
     is_stable_release_tag,
     local_tag_object,
+    prepare_release_target,
+    release_target_relation,
     remote_tag_object,
     remote_tags,
     require_clean_tracked_tree,
+    select_release_remote,
     validate_tag,
 )
 from envs_xmpp_ops.interaction import confirm
@@ -108,6 +113,134 @@ def test_git_helpers_preserve_frontend_error_type():
 
     with pytest.raises(DeployError, match="release tag does not exist"):
         validate_tag(missing_tag, "v9.9.9", error_factory=DeployError)
+
+
+def test_release_remote_prefers_branch_configuration_then_origin():
+    def run_git(*args: str, **_kwargs: object):
+        if args == ("remote",):
+            return _result(stdout="origin\nupstream\n")
+        if args[:4] == ("symbolic-ref", "--quiet", "--short", "HEAD"):
+            return _result(stdout="main\n")
+        if args[:3] == ("config", "--get", "branch.main.remote"):
+            return _result(stdout="upstream\n")
+        raise AssertionError(args)
+
+    assert select_release_remote(run_git) == "upstream"
+    assert select_release_remote(run_git, configured_remote="origin") == "origin"
+
+
+def test_prepare_release_target_fetches_only_selected_stable_tag():
+    calls: list[tuple[str, ...]] = []
+
+    def run_git(*args: str, **_kwargs: object):
+        calls.append(args)
+        if args == ("remote",):
+            return _result(stdout="origin\n")
+        if args[:4] == ("symbolic-ref", "--quiet", "--short", "HEAD"):
+            return _result(1)
+        if args[:4] == ("fetch", "--prune", "--no-tags", "origin"):
+            return _result()
+        if args[:4] == ("ls-remote", "--tags", "--refs", "--sort=-version:refname"):
+            return _result(stdout="a refs/tags/v2.0.0-rc1\nb refs/tags/v1.9.0\n")
+        if args[:3] == ("ls-remote", "--tags", "origin"):
+            return _result(stdout="tag-object refs/tags/v1.9.0\n")
+        if args[:3] == ("rev-parse", "--verify", "--quiet"):
+            if str(args[-1]).endswith("^{commit}"):
+                return _result()
+            return _result(1)
+        if args[:3] == ("fetch", "--no-tags", "origin"):
+            return _result()
+        raise AssertionError(args)
+
+    remote, tag = prepare_release_target(run_git, None)
+
+    assert (remote, tag) == ("origin", "v1.9.0")
+    assert ("fetch", "--prune", "--no-tags", "origin") in calls
+    assert (
+        "fetch",
+        "--no-tags",
+        "origin",
+        "refs/tags/v1.9.0:refs/tags/v1.9.0",
+    ) in calls
+
+
+def test_prepare_release_target_rejects_nonstable_explicit_tag():
+    with pytest.raises(RuntimeError, match="stable vX.Y.Z"):
+        prepare_release_target(lambda *_args, **_kwargs: _result(), "main")
+
+
+def test_release_target_relation_classifies_git_ancestry():
+    outcomes = iter((_result(0), _result(1)))
+
+    def run_git(*args: str, **_kwargs: object):
+        assert args[0] == "merge-base"
+        return next(outcomes)
+
+    assert release_target_relation(run_git, "v2.0.0") == "upgrade"
+
+
+def test_shared_release_approval_policy_handles_downgrade_and_same_release():
+    prompts: list[str] = []
+    lines: list[str] = []
+
+    assert (
+        approve_release_target(
+            current="v2.0.0",
+            target="v1.9.0",
+            relation="downgrade",
+            requested_tag=None,
+            allow_downgrade=False,
+            head_is_detached=False,
+            require_confirmation=prompts.append,
+            print_func=lines.append,
+        )
+        is False
+    )
+    assert prompts == []
+    assert any("No newer release" in line for line in lines)
+
+    assert (
+        approve_release_target(
+            current="v2.0.0",
+            target="v2.0.0",
+            relation="same",
+            requested_tag=None,
+            allow_downgrade=False,
+            head_is_detached=True,
+            require_confirmation=prompts.append,
+            print_func=lines.append,
+        )
+        is False
+    )
+    assert any("Already at release" in line for line in lines)
+
+
+def test_checkout_file_backup_restores_only_changed_files(tmp_path: Path):
+    root = tmp_path / "checkout"
+    backup_dir = tmp_path / "backup"
+    root.mkdir()
+    backup_dir.mkdir()
+    config = root / "config.py"
+    config.write_text("before\n", encoding="utf-8")
+    external = tmp_path / "external.db"
+    external.write_text("external\n", encoding="utf-8")
+    lines: list[str] = []
+
+    backups = backup_checkout_files(
+        {"config": config, "database": external},
+        root=root,
+        backup_dir=backup_dir,
+        print_func=lines.append,
+    )
+    assert len(backups) == 1
+    assert backups[0].label == "config"
+    assert lines == [f"PROTECT config: {config}"]
+
+    config.write_text("after\n", encoding="utf-8")
+    restore_checkout_files(backups, print_func=lines.append)
+
+    assert config.read_text(encoding="utf-8") == "before\n"
+    assert lines[-1] == f"RESTORE protected config: {config}"
 
 
 def test_systemd_inspection_uses_injected_runners():

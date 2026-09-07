@@ -41,3 +41,37 @@ async def check_latest_release(
         )
     except Exception as exc:  # noqa: BLE001 - transport/comparison errors are result data
         return ReleaseCheckResult(False, None, str(exc))
+
+
+@dataclass(frozen=True)
+class ReleaseCheckDecision:
+    """Release result plus a side-effect-free notification decision."""
+
+    result: ReleaseCheckResult
+    notification_version: str | None = None
+
+    def as_tuple(self) -> tuple[bool, str | None, str | None]:
+        """Return the legacy result tuple used by both applications."""
+        return self.result.as_tuple()
+
+
+async def evaluate_release_check(
+    local_version: str,
+    fetch_latest: Callable[[], str],
+    *,
+    announce: bool = False,
+    last_notified_version: str | None = None,
+) -> ReleaseCheckDecision:
+    """Fetch/compare a release and decide whether one notification is due.
+
+    Notification transport and mutation of application state stay with the
+    caller. The decision only suppresses announcements when disabled for this
+    run or when the same normalized remote version was already announced.
+    """
+    result = await check_latest_release(local_version, fetch_latest)
+    notification_version: str | None = None
+    if announce and result.update_available and result.remote_version is not None:
+        previous_notification = normalize_version(last_notified_version or "")
+        if previous_notification != result.remote_version:
+            notification_version = result.remote_version
+    return ReleaseCheckDecision(result, notification_version)

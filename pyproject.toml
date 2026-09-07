@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "envs-xmpp"
-version = "0.7.1"
+version = "0.8.0"
 readme = "README.md"
 description = "Shared runtime and deployment primitives for envs.net XMPP bots"
 requires-python = ">=3.12"

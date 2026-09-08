@@ -55,22 +55,46 @@ src/
 │   ├── pagination.py
 │   ├── release/
 │   ├── runtime/
+│   │   ├── alerts.py
+│   │   └── diagnostics.py
+│   ├── security/
+│   │   └── redaction.py
 │   ├── storage/
 │   │   ├── archive.py
 │   │   ├── files.py
+│   │   ├── outbox.py
 │   │   └── sqlite.py
 │   └── xmpp/
+│       ├── avatar.py
+│       ├── messaging.py
+│       ├── muc_join.py
+│       └── occupants.py
 └── envs_xmpp_ops/
     ├── accounts.py
     ├── deploy.py
     ├── git.py
     ├── interaction.py
+    ├── layout.py
     ├── paths.py
     ├── profile.py
     ├── service.py
     ├── systemd.py
     └── venv.py
 ```
+
+## Stable 0.11 API
+
+Version 0.11 adds package-level convenience imports for the shared infrastructure
+introduced during the bot consolidation.  The public surfaces are
+`envs_xmpp_core.xmpp`, `envs_xmpp_core.storage`, `envs_xmpp_core.runtime`,
+`envs_xmpp_core.security`, and `envs_xmpp_ops`.  Direct module imports remain
+supported, so existing consumers do not have to migrate immediately.
+
+The stable shared layer now covers avatar/profile publication, confirmed MUC
+joins, normalized occupant identity, message-target/reply routing, durable
+outbox storage, operational alert state, redacted diagnostics and deployment
+layout discovery.  Bot-specific policy, command behavior, moderation, OMEMO,
+plugin systems and notification wording intentionally remain outside the core.
 
 `envs_xmpp_ops` is designed for thin bot-specific deployment frontends. The
 frontends keep bot policy such as config migration, database backup/restore and

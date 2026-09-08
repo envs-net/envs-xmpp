@@ -1,3 +1,3 @@
 """Shared technical infrastructure for envs.net XMPP bots."""
 
-__version__ = "0.10.1"
+__version__ = "0.10.2"

@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 
 from envs_xmpp_core.storage.backup import (
+    BackupArchiveEntrySpec,
     BackupArchiveError,
     BackupArchiveSource,
     build_backup_archive,
     read_backup_manifest,
+    stage_backup_archive,
     verify_backup_archive,
 )
 
@@ -137,3 +139,79 @@ def test_read_backup_manifest_rejects_duplicate_manifest_member(tmp_path: Path):
 
     with pytest.raises(BackupArchiveError, match="duplicate archive member"):
         read_backup_manifest(target)
+
+
+def test_stage_backup_archive_verifies_and_extracts_declared_members(tmp_path: Path):
+    database = tmp_path / "database.sqlite3"
+    config = tmp_path / "config.py"
+    database.write_bytes(b"database")
+    config.write_text("VALUE = 1\n", encoding="utf-8")
+    archive_path = tmp_path / "backup.zip"
+    build_backup_archive(
+        archive_path,
+        sources=[
+            BackupArchiveSource("database.sqlite3", database, required=True),
+            BackupArchiveSource("config.py", config),
+        ],
+        manifest={"format": "example-v1"},
+    )
+
+    staged = stage_backup_archive(
+        archive_path,
+        tmp_path / "stage",
+        entries=[
+            BackupArchiveEntrySpec("database", "database.sqlite3", required=True),
+            BackupArchiveEntrySpec("config", "config.py"),
+            BackupArchiveEntrySpec("omemo", "omemo.json"),
+        ],
+        expected_fields={"format": "example-v1"},
+    )
+
+    assert staged.manifest is not None
+    assert staged.manifest["format"] == "example-v1"
+    assert staged.entries["database"] is not None
+    assert staged.entries["database"].read_bytes() == b"database"
+    assert staged.entries["config"] is not None
+    assert staged.entries["config"].read_text(encoding="utf-8") == "VALUE = 1\n"
+    assert staged.entries["omemo"] is None
+
+
+def test_stage_backup_archive_rejects_checksum_tampering_before_extraction(tmp_path: Path):
+    source = tmp_path / "data.txt"
+    source.write_text("original", encoding="utf-8")
+    archive_path = tmp_path / "backup.zip"
+    build_backup_archive(
+        archive_path,
+        sources=[BackupArchiveSource("data.txt", source)],
+        manifest={"format": "example-v1"},
+    )
+
+    rewritten = tmp_path / "rewritten.zip"
+    with zipfile.ZipFile(archive_path) as old, zipfile.ZipFile(rewritten, "w") as new:
+        for info in old.infolist():
+            content = b"tampered" if info.filename == "data.txt" else old.read(info.filename)
+            new.writestr(info, content)
+    rewritten.replace(archive_path)
+
+    stage_dir = tmp_path / "stage"
+    with pytest.raises(BackupArchiveError, match="checksum mismatch"):
+        stage_backup_archive(
+            archive_path,
+            stage_dir,
+            entries=[BackupArchiveEntrySpec("data", "data.txt", required=True)],
+            expected_fields={"format": "example-v1"},
+        )
+
+    assert not stage_dir.exists()
+
+
+def test_stage_backup_archive_validates_entry_specs(tmp_path: Path):
+    with pytest.raises(ValueError, match="duplicate backup archive entry key"):
+        stage_backup_archive(
+            tmp_path / "missing.zip",
+            tmp_path / "stage",
+            entries=[
+                BackupArchiveEntrySpec("same", "one"),
+                BackupArchiveEntrySpec("same", "two"),
+            ],
+        )

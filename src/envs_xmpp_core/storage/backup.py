@@ -13,7 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .archive import UnsafeArchiveMember, validate_zip_member_name, zip_member_sha256
+from .archive import (
+    UnsafeArchiveMember,
+    extract_zip_member,
+    validate_zip_member_name,
+    zip_member_sha256,
+)
 from .files import fsync_directory, sha256_file
 
 DEFAULT_MANIFEST_NAME = "manifest.json"
@@ -31,6 +36,28 @@ class BackupArchiveSource:
     path: Path
     source: str | Path | None = None
     required: bool = False
+
+
+
+
+@dataclass(frozen=True)
+class BackupArchiveEntrySpec:
+    """One known archive member to stage for restore/inspection."""
+
+    key: str
+    member: str
+    required: bool = False
+    mode: int = 0o600
+
+
+@dataclass(frozen=True)
+class StagedBackupArchive:
+    """Verified archive metadata plus staged known members."""
+
+    path: Path
+    manifest: dict[str, Any] | None
+    members: frozenset[str]
+    entries: Mapping[str, Path | None]
 
 
 @dataclass(frozen=True)
@@ -307,3 +334,79 @@ def build_backup_archive(
     except BaseException:
         tmp_path.unlink(missing_ok=True)
         raise
+
+
+def stage_backup_archive(
+    path: str | Path,
+    target_dir: str | Path,
+    *,
+    entries: Iterable[BackupArchiveEntrySpec],
+    manifest_name: str = DEFAULT_MANIFEST_NAME,
+    expected_fields: Mapping[str, object] | None = None,
+    allow_legacy_without_files: bool = True,
+    verify_checksums: bool = True,
+) -> StagedBackupArchive:
+    """Verify one backup archive and extract only caller-declared members.
+
+    Required entries participate in archive verification. Optional entries are
+    returned as ``None`` when absent. Extraction happens only after the complete
+    archive/manifest/checksum verification succeeds, so callers can safely build
+    restore transactions from the staged paths without duplicating ZIP policy.
+    """
+    archive_path = Path(path)
+    target = Path(target_dir)
+    items = tuple(entries)
+    if not items:
+        raise ValueError("backup archive staging has no entries")
+
+    seen_keys: set[str] = set()
+    seen_members: set[str] = set()
+    for item in items:
+        if not item.key:
+            raise ValueError("backup archive entry key must not be empty")
+        validate_zip_member_name(item.member)
+        if item.key in seen_keys:
+            raise ValueError(f"duplicate backup archive entry key: {item.key}")
+        if item.member in seen_members:
+            raise ValueError(f"duplicate backup archive member spec: {item.member}")
+        seen_keys.add(item.key)
+        seen_members.add(item.member)
+
+    verification = verify_backup_archive(
+        archive_path,
+        manifest_name=manifest_name,
+        expected_fields=expected_fields,
+        required_members=(item.member for item in items if item.required),
+        allow_legacy_without_files=allow_legacy_without_files,
+        verify_checksums=verify_checksums,
+    )
+    if not verification.ok:
+        raise BackupArchiveError("invalid backup archive: " + "; ".join(verification.errors))
+
+    target.mkdir(parents=True, exist_ok=True)
+    staged: dict[str, Path | None] = {}
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            for index, item in enumerate(items):
+                if item.member not in verification.members:
+                    staged[item.key] = None
+                    continue
+                destination = target / f"{index:03d}-{Path(item.member).name}"
+                staged[item.key] = extract_zip_member(
+                    archive,
+                    item.member,
+                    destination,
+                    mode=item.mode,
+                    fsync=True,
+                )
+    except BackupArchiveError:
+        raise
+    except (OSError, zipfile.BadZipFile, UnsafeArchiveMember) as exc:
+        raise BackupArchiveError(f"could not stage backup archive: {exc}") from exc
+
+    return StagedBackupArchive(
+        path=archive_path,
+        manifest=verification.manifest,
+        members=verification.members,
+        entries=staged,
+    )

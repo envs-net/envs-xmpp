@@ -1,5 +1,10 @@
 # envs-xmpp
 
+[![PyPI](https://img.shields.io/pypi/v/envs-xmpp.svg)](https://pypi.org/project/envs-xmpp/)
+[![Python](https://img.shields.io/pypi/pyversions/envs-xmpp.svg)](https://pypi.org/project/envs-xmpp/)
+[![Quality](https://github.com/envs-net/envs-xmpp/actions/workflows/quality.yml/badge.svg)](https://github.com/envs-net/envs-xmpp/actions/workflows/quality.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+
 Shared technical infrastructure for the envs.net XMPP bots [`envsbot`](https://github.com/envs-net/envsbot) and
 [`muc_banbot`](https://github.com/envs-net/muc_banbot).
 
@@ -31,9 +36,16 @@ default/type/range/lifecycle metadata; each bot keeps its domain-specific valida
 reload behavior and operator-facing wording local. Pagination provides a neutral page-slice
 model while bot frontends retain their existing command-specific return formats.
 
-## Development install
+## Installation
 
-Install the checkout into each bot virtual environment:
+Install the stable package from PyPI:
+
+```bash
+python -m pip install envs-xmpp
+python -c "import envs_xmpp_core; print(envs_xmpp_core.__version__)"
+```
+
+For development, install a checkout in editable mode:
 
 ```bash
 python -m pip install -e /path/to/envs-xmpp
@@ -108,6 +120,17 @@ below `$XDG_CACHE_HOME/envs-xmpp/deploy/` (or `~/.cache/envs-xmpp/deploy/`),
 installs the pinned version from PyPI, and re-executes the deployment frontend.
 `ENVS_XMPP_DEPLOY_SOURCE` can point at a local checkout or wheel for development
 and pre-release testing.
+
+## Documentation
+
+- [Developer guide](https://github.com/envs-net/envs-xmpp/blob/main/docs/development.md)
+- [Architecture and ownership boundaries](https://github.com/envs-net/envs-xmpp/blob/main/docs/architecture.md)
+- [Stable API reference](https://github.com/envs-net/envs-xmpp/blob/main/docs/api.md)
+- [Consolidation policy](https://github.com/envs-net/envs-xmpp/blob/main/docs/consolidation-policy.md)
+
+The documentation intentionally distinguishes stable public imports from internal
+implementation details. Bot-specific policy should stay in the applications unless
+it has demonstrably identical semantics in more than one consumer.
 
 ## CI and PyPI releases
 

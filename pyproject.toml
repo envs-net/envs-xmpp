@@ -26,6 +26,8 @@ dev = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/envs-net/envs-xmpp"
+Documentation = "https://github.com/envs-net/envs-xmpp/blob/main/docs/README.md"
 Repository = "https://github.com/envs-net/envs-xmpp"
 Issues = "https://github.com/envs-net/envs-xmpp/issues"
 

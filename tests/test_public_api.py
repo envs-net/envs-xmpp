@@ -1,4 +1,4 @@
-"""Contract tests for the stable 0.11 public convenience imports."""
+"""Contract tests for the stable 1.0 public convenience imports."""
 
 from envs_xmpp_core import __version__
 from envs_xmpp_core.runtime import (
@@ -62,8 +62,8 @@ from envs_xmpp_ops import (
 )
 
 
-def test_distribution_version_is_0_11() -> None:
-    assert __version__ == "0.11.0"
+def test_distribution_version_is_1_0() -> None:
+    assert __version__ == "1.0.0"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:

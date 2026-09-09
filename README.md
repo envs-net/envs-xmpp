@@ -82,9 +82,9 @@ src/
     └── venv.py
 ```
 
-## Stable 0.11 API
+## Stable 1.0 API
 
-Version 0.11 adds package-level convenience imports for the shared infrastructure
+Version 1.0 formalizes package-level convenience imports for the shared infrastructure
 introduced during the bot consolidation.  The public surfaces are
 `envs_xmpp_core.xmpp`, `envs_xmpp_core.storage`, `envs_xmpp_core.runtime`,
 `envs_xmpp_core.security`, and `envs_xmpp_ops`.  Direct module imports remain

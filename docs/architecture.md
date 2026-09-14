@@ -36,6 +36,10 @@ This keeps runtime and deployment contracts on one version while preserving a cl
 `envs_xmpp_core.security` owns generic redaction helpers.
 
 `envs_xmpp_ops` owns Git, systemd, virtualenv, path/account and deployment transaction mechanisms.
+It also owns policy-neutral dependency-drift inspection: consumer deploy
+frontends select their Python-specific constraint snapshot while the shared
+layer parses runtime dependencies, probes the selected virtualenv, and reports
+version mismatches.
 
 ## Application-owned policy
 

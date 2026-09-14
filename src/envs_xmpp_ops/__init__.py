@@ -2,6 +2,11 @@
 
 from envs_xmpp_core import __version__
 
+from .dependency_drift import (
+    DependencyDriftReport,
+    DependencyVersion,
+    inspect_dependency_drift,
+)
 from .deploy import DeploymentTarget
 from .layout import (
     deployment_environment,
@@ -17,10 +22,13 @@ from .layout import (
 from .profile import DeploymentProfile
 
 __all__ = [
+    "DependencyDriftReport",
+    "DependencyVersion",
     "DeploymentProfile",
     "DeploymentTarget",
     "__version__",
     "deployment_environment",
+    "inspect_dependency_drift",
     "resolve_environment_path",
     "service_account",
     "split_systemd_words",

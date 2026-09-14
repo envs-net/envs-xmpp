@@ -232,3 +232,7 @@ frontends. Consumer repositories add only project-specific paths and policy.
 bootstrap agree on the installed envs-xmpp version. It is intended as a project
 validation step before tagging; it deliberately does not require consumer
 package versions to be bumped during development.
+
+## Dependency drift
+
+`envs_xmpp_ops.inspect_dependency_drift()` compares runtime dependencies in a virtualenv with exact reviewed constraint pins.

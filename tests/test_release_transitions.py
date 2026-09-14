@@ -62,3 +62,12 @@ async def test_evaluate_release_check_normalizes_notification_deduplication() ->
 
     same = await evaluate_release_check("1.2.3", lambda: "1.2.3", announce=True)
     assert same.notification_version is None
+
+
+def test_stable_release_tags_preserves_order_and_filters_prereleases():
+    from envs_xmpp_ops.git import stable_release_tags
+
+    assert stable_release_tags(["v2.0.0", "v2.1.0-rc1", "junk", "v1.9.0"]) == [
+        "v2.0.0",
+        "v1.9.0",
+    ]

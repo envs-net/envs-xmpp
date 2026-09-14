@@ -1,5 +1,10 @@
 """Stable bot-neutral XMPP helpers."""
 
+from .affiliations import (
+    AffiliationQueryOptions,
+    AffiliationQueryResult,
+    query_muc_affiliation,
+)
 from .avatar import (
     AvatarPayload,
     avatar_sha1,
@@ -49,9 +54,12 @@ from .occupants import (
     occupant_snapshot,
     occupant_to_mapping,
 )
+from .stanza import iq_error_condition, iq_error_summary, iq_error_text
 
 __all__ = [
     "MUC_FEATURE",
+    "AffiliationQueryOptions",
+    "AffiliationQueryResult",
     "AvatarPayload",
     "MessageTarget",
     "MessageTargetKind",
@@ -70,6 +78,9 @@ __all__ = [
     "find_occupant_by_nick",
     "find_self_occupant",
     "identity_is_muc",
+    "iq_error_condition",
+    "iq_error_summary",
+    "iq_error_text",
     "is_muc_private_message",
     "join_muc_confirmed",
     "join_muc_with_timeout",
@@ -86,6 +97,7 @@ __all__ = [
     "occupant_snapshot",
     "occupant_to_mapping",
     "publish_xep0084_avatar",
+    "query_muc_affiliation",
     "set_presence_avatar_hash",
     "start_muc_join_task",
     "target_is_muc_room",

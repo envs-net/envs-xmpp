@@ -60,12 +60,54 @@ Use the routing model for DM/MUC-PM/groupchat mechanics. Encryption and command 
 
 Additional protocol helpers remain supported through documented direct modules such as `envs_xmpp_core.xmpp.connection`, `jid`, `invites`, `pending_invites` and `stanza`.
 
+For operator logs and alerts, stanza-safe IQ error helpers avoid stringifying Slixmpp exceptions that may otherwise render the complete raw IQ stanza:
+
+```python
+from envs_xmpp_core.xmpp import (
+    iq_error_condition,
+    iq_error_summary,
+    iq_error_text,
+)
+```
+
+`iq_error_summary()` reports values such as `IQ error forbidden: subscription denied` or `IQ timeout` without embedding the original stanza.
+
+
+## Operator presentation
+
+Version 1.1 adds a shared, policy-neutral presentation layer used by both bots for operator-facing status, task and room views:
+
+```python
+from envs_xmpp_core.presentation import (
+    RoomView,
+    StatusSection,
+    TaskView,
+    filter_room_views,
+    filter_task_views,
+    parse_room_list_request,
+    parse_task_list_request,
+    render_room_entry,
+    render_status_sections,
+    render_task_entry,
+    render_task_summary,
+)
+```
+
+The applications still collect their own runtime data and own authorization, health policy, moderation policy and command registration. The shared layer only normalizes common state, parses common filter/paging grammar, formats relative timestamps, and renders consistent operator output.
+
+`envs_xmpp_core.pagination` also exposes `PageRequest`, `parse_page_request()` and `format_page()`. A persistent `preamble` can hold summaries and legends outside the paginated inventory so those rows remain visible on every page. When a default request carries a configured `page_size`, explicit `page`, `last`, and `all` selectors preserve it.
+
 ## Runtime
 
 Convenience imports from `envs_xmpp_core.runtime` include alert and diagnostic primitives:
 
 ```python
-from envs_xmpp_core.runtime import AlertTracker, diagnostic_payload
+from envs_xmpp_core.runtime import (
+    AlertTracker,
+    CooldownDecision,
+    SessionLifecycleState,
+    diagnostic_payload,
+)
 ```
 
 Documented direct modules provide the broader runtime toolkit:
@@ -76,7 +118,32 @@ Documented direct modules provide the broader runtime toolkit:
 - `runtime.health` - passive health checks/snapshots;
 - `runtime.alerts` - transition-aware operational alert state;
 - `runtime.diagnostics` - redacted structured error payloads;
-- `runtime.systemd` - runtime systemd notification helpers.
+- `runtime.systemd` - runtime systemd notification helpers;
+- `runtime.session` - XMPP session generations, reconnect counters and operator telemetry.
+
+
+## Bounded MUC affiliation queries
+
+The development API also exposes a bot-neutral XEP-0045 affiliation query helper:
+
+```python
+from envs_xmpp_core.xmpp import AffiliationQueryOptions, query_muc_affiliation
+
+result = await query_muc_affiliation(
+    xmpp["xep_0045"],
+    "room@example.org",
+    "owner",
+    options=AffiliationQueryOptions(
+        timeout_seconds=10.0,
+        attempts=2,
+        retry_delay_seconds=1.0,
+    ),
+)
+```
+
+The helper bounds IQ waits, retries timeouts and configured transient stanza errors, and returns a structured `AffiliationQueryResult`. Error summaries intentionally omit raw IQ XML so operational logs do not turn an ordinary timeout into a full stanza dump. Retry and authorization policy beyond that transport behavior remains in the consuming bot.
+
+`SessionLifecycleState` similarly owns only generation/state tracking. Reconnect scheduling, startup phase policy, room synchronization and process shutdown remain application responsibilities.
 
 ## Storage
 
@@ -128,3 +195,40 @@ Direct modules under `envs_xmpp_ops` cover accounts, Git, interaction, paths, se
 ## Compatibility
 
 Within the 1.x line, documented public imports are intended to remain available. New APIs may be added in minor releases. Private names and undocumented implementation details may change without compatibility guarantees.
+
+## Runtime health facts
+
+`envs_xmpp_core.runtime` exposes policy-neutral health primitives shared by both
+bots:
+
+```python
+from envs_xmpp_core.runtime import (
+    HealthCheck,
+    HealthSnapshot,
+    KeyedCooldown,
+    RoomJoinHealthState,
+    TaskHealthState,
+    WatchdogHealthState,
+    analyze_room_join_state,
+    health_check_from_messages,
+    health_snapshot_messages,
+    supervisor_task_health_state,
+    watchdog_health_state,
+)
+```
+
+The helpers normalize runtime facts and message storage only. Whether a missing
+room, restarted worker, watchdog lag or application-specific condition is an
+operator warning or a hard error remains consumer policy.
+
+## Deployment target and release audit
+
+`envs_xmpp_ops.DeploymentTarget` carries the common immutable deployment
+coordinates and provides virtualenv/environment helpers for thin deployment
+frontends. Consumer repositories add only project-specific paths and policy.
+
+`python -m envs_xmpp_ops.release_audit` validates that a consumer's
+`pyproject.toml`, `requirements.txt`, Python constraint snapshots and deployment
+bootstrap agree on the installed envs-xmpp version. It is intended as a project
+validation step before tagging; it deliberately does not require consumer
+package versions to be bumped during development.

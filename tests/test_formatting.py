@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
-from envs_xmpp_core.formatting import format_bytes, format_duration
+from envs_xmpp_core.formatting import (
+    format_absolute_time,
+    format_bytes,
+    format_duration,
+    format_relative_time,
+)
 
 
 def test_format_duration_supports_domain_specific_zero_label():
@@ -25,3 +32,11 @@ def test_format_bytes_supports_negative_policy_and_unit_cap():
 def test_format_bytes_rejects_unknown_unit():
     with pytest.raises(ValueError, match="Unsupported max_unit"):
         format_bytes(1, max_unit="ZiB")
+
+
+def test_time_formatters_support_iso_datetime_and_epoch():
+    now = datetime(2026, 9, 11, 1, 0, tzinfo=UTC)
+    assert format_relative_time("2026-09-11T00:59:30+00:00", now=now) == "30s ago"
+    assert format_relative_time(now.timestamp() + 90, now=now) == "in 1m 30s"
+    assert format_absolute_time(now.timestamp()) == "2026-09-11T01:00:00+00:00"
+    assert format_absolute_time(None) == "-"

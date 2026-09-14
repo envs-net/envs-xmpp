@@ -10,8 +10,55 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .layout import deployment_environment, venv_binary
 from .paths import relative_to_root
 from .profile import DeploymentProfile
+
+
+@dataclass(frozen=True, kw_only=True)
+class DeploymentTarget:
+    """Common immutable deployment fields shared by bot frontends.
+
+    Application deploy scripts may subclass this with project-specific paths
+    while reusing the common virtualenv and environment helpers. Keeping this
+    small base in ``envs_xmpp_ops`` avoids two copies of the same deployment
+    plumbing without moving project policy into the shared package.
+    """
+
+    root: Path
+    venv: Path
+    config: Path
+    service: str
+    service_user: str
+    service_group: str
+    unit: Path
+    python: str
+    dry_run: bool = False
+
+    @property
+    def pip(self) -> Path:
+        return venv_binary(self.venv, "pip")
+
+    @property
+    def venv_python(self) -> Path:
+        return venv_binary(self.venv, "python")
+
+    def binary(self, name: str) -> Path:
+        """Return one executable path from this deployment's virtualenv."""
+        return venv_binary(self.venv, name)
+
+    def environment_for(
+        self,
+        config_environment: str,
+        *,
+        disable_bytecode: bool = False,
+    ) -> dict[str, str]:
+        """Build the subprocess environment for this deployment."""
+        return deployment_environment(
+            config_environment=config_environment,
+            config=self.config,
+            disable_bytecode=disable_bytecode,
+        )
 
 
 @dataclass(frozen=True)

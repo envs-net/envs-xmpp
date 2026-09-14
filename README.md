@@ -65,10 +65,13 @@ src/
 ├── envs_xmpp_core/
 │   ├── config/
 │   ├── pagination.py
+│   ├── presentation.py
 │   ├── release/
 │   ├── runtime/
 │   │   ├── alerts.py
-│   │   └── diagnostics.py
+│   │   ├── diagnostics.py
+│   │   ├── health.py
+│   │   └── session.py
 │   ├── security/
 │   │   └── redaction.py
 │   ├── storage/
@@ -77,6 +80,7 @@ src/
 │   │   ├── outbox.py
 │   │   └── sqlite.py
 │   └── xmpp/
+│       ├── affiliations.py
 │       ├── avatar.py
 │       ├── messaging.py
 │       ├── muc_join.py
@@ -89,14 +93,15 @@ src/
     ├── layout.py
     ├── paths.py
     ├── profile.py
+    ├── release_audit.py
     ├── service.py
     ├── systemd.py
     └── venv.py
 ```
 
-## Stable 1.0 API
+## Stable 1.x API
 
-Version 1.0 formalizes package-level convenience imports for the shared infrastructure
+Version 1.0 formalized package-level convenience imports for the shared infrastructure
 introduced during the bot consolidation.  The public surfaces are
 `envs_xmpp_core.xmpp`, `envs_xmpp_core.storage`, `envs_xmpp_core.runtime`,
 `envs_xmpp_core.security`, and `envs_xmpp_ops`.  Direct module imports remain
@@ -105,13 +110,14 @@ supported, so existing consumers do not have to migrate immediately.
 The stable shared layer now covers avatar/profile publication, confirmed MUC
 joins, normalized occupant identity, message-target/reply routing, durable
 outbox storage, operational alert state, redacted diagnostics and deployment
-layout discovery.  Bot-specific policy, command behavior, moderation, OMEMO,
-plugin systems and notification wording intentionally remain outside the core.
+layout discovery. Version 1.1 adds the shared operator-presentation models and renderers for task, status and room inventories. Current development additionally shares XMPP session-generation telemetry and bounded MUC affiliation IQ mechanics while keeping reconnect scheduling and bot policy in the applications. Bot-specific policy, command behavior, moderation, OMEMO, plugin systems and notification wording intentionally remain outside the core.
 
 `envs_xmpp_ops` is designed for thin bot-specific deployment frontends. The
-frontends keep bot policy such as config migration, database backup/restore and
-service hardening local, while shared Git release selection, systemd inspection,
-operator confirmation, account/path checks and virtualenv creation live here.
+frontends subclass the shared `DeploymentTarget` for common checkout/venv/config/
+service coordinates and keep bot policy such as config migration, database
+backup/restore and service hardening local. Shared Git release selection,
+systemd inspection, operator confirmation, account/path checks, virtualenv
+creation and consumer release-state auditing live here.
 
 Fresh installs do not assume that this package is already present. Each bot
 ships a tiny stdlib-only bootstrap shim. When the exact required `envs-xmpp`
@@ -152,9 +158,12 @@ ordering stay shared.
 
 The quality runner enforces a common baseline: compilation, project validation,
 warning-strict tests, Ruff repository/F401/I-UP-B gates, mypy, Git whitespace
-validation and dependency audit.
+validation and dependency audit. Consumer project validation can include
+`python -m envs_xmpp_ops.release_audit`, which verifies that package metadata,
+requirements, constraints and the deploy bootstrap agree on one shared-core
+version before a release is cut.
 
 
 ## Runtime and utility primitives
 
-The shared core also provides heartbeat-aware worker waits, lifecycle phase orchestration, passive `HealthCheck`/`HealthSnapshot` diagnostics with failure-isolated collection, normalized task/watchdog/lifecycle diagnostic state, asynchronous release comparison results, and neutral human-readable duration/byte formatting. Applications keep notification policy, active recovery behavior, severity decisions, concrete health checks and domain-specific labels locally.
+The shared core also provides heartbeat-aware worker waits, lifecycle phase orchestration, passive `HealthCheck`/`HealthSnapshot` diagnostics with failure-isolated collection, normalized task/watchdog/lifecycle/room-inventory facts, ordered health-message flattening, asynchronous release comparison results, and neutral human-readable duration/byte formatting. Applications keep notification policy, active recovery behavior, severity decisions, concrete domain checks and labels locally.

@@ -52,3 +52,13 @@ The 1.x series follows these rules:
 A shared change is not complete until its own tests pass and the affected bot suites pass against the same checkout. Prefer focused tests while iterating, then run each repository's full quality gate before release.
 
 Do not move application policy into envs-xmpp merely to reduce line count. The shared package owns mechanisms; the bots own policy and user-facing behavior.
+
+## Consumer release-state audit
+
+`python -m envs_xmpp_ops.release_audit` is intended for envsbot and muc_banbot
+quality gates. It checks that `pyproject.toml`, `requirements.txt`, both Python
+constraint snapshots and the deploy bootstrap all agree with the installed
+`envs-xmpp` version. This catches partial shared-core upgrades before a release
+tag or production deployment. Consumer package versions are deliberately not
+part of this check and can remain unchanged while a release is still being
+assembled.

@@ -200,3 +200,70 @@ def test_lifecycle_health_state_normalizes_shared_phase_results() -> None:
     assert state.startup == (("storage", "ok"), ("rooms", "partial"))
     assert state.startup_attention == ("rooms",)
     assert state.shutdown_attention == ("database",)
+
+
+def test_message_health_check_and_snapshot_message_flattening() -> None:
+    from envs_xmpp_core.runtime.health import (
+        HealthSnapshot,
+        health_check_from_messages,
+        health_snapshot_messages,
+    )
+
+    warning = health_check_from_messages(
+        "rooms",
+        "rooms checked",
+        warnings=["one room missing"],
+        notes=["retry scheduled"],
+        data={"count": 1},
+    )
+    broken = HealthCheck("database", "error", "failed", error="RuntimeError: boom")
+    snapshot = HealthSnapshot(checked_at="fixed", checks={"rooms": warning, "database": broken})
+
+    assert warning.status == "warning"
+    assert warning.data["warnings"] == ("one room missing",)
+    assert warning.data["count"] == 1
+    assert health_snapshot_messages(snapshot) == (
+        ["database health check failed: RuntimeError: boom"],
+        ["one room missing"],
+        ["retry scheduled"],
+    )
+
+
+def test_analyze_room_join_state_separates_expected_missing_and_runtime_only() -> None:
+    from envs_xmpp_core.runtime.health import analyze_room_join_state
+
+    state = analyze_room_join_state(
+        configured=["auto@example", "manual@example"],
+        expected=["auto@example"],
+        joined=["manual@example", "runtime@example"],
+    )
+
+    assert state.expected_joined == 0
+    assert state.missing_expected == ("auto@example",)
+    assert state.runtime_only == ("runtime@example",)
+    assert state.joined_rooms == ("manual@example", "runtime@example")
+
+
+def test_supervisor_task_health_state_accepts_both_supervisor_facades() -> None:
+    from types import SimpleNamespace
+
+    from envs_xmpp_core.runtime.health import supervisor_task_health_state
+
+    supervisor = SimpleNamespace(
+        snapshot=lambda include_done=True: [
+            SimpleNamespace(
+                group="_core",
+                name="worker",
+                status="running",
+                kind="service",
+                restart_count=0,
+                circuit_state="closed",
+                last_error=None,
+            )
+        ]
+    )
+    state = supervisor_task_health_state(supervisor)
+    assert state is not None
+    assert state.services_running == 1
+    assert state.tasks[0].label == "_core/worker"
+    assert supervisor_task_health_state(None) is None

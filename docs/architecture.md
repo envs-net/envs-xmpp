@@ -55,3 +55,24 @@ A thin adapter is acceptable when it protects these boundaries. Removing every w
 ## Stability principle
 
 The shared layer should grow from observed common behavior, not speculative abstraction. See [consolidation-policy.md](consolidation-policy.md).
+
+## Deployment frontend boundary
+
+`envs_xmpp_ops.deploy.DeploymentTarget` owns the common immutable deployment
+coordinates (checkout, virtualenv, config, service account/unit, base Python)
+and the virtualenv/environment helpers used by both bots.  Each application
+subclasses it only for project-specific paths and executable names.  The
+shared package continues to own Git/systemd/virtualenv transactions; the bot
+frontends retain prompts, config migration, permission policy and runtime-path
+validation.  Small local wrapper functions are intentionally allowed as test
+and dependency-injection seams rather than duplicating the underlying
+mechanism.
+
+## Shared health facts
+
+`envs_xmpp_core.runtime.health` owns policy-neutral task, watchdog, lifecycle
+and room-inventory normalization.  It also provides the common message-based
+`HealthCheck` builder and ordered snapshot-message flattening used by status
+renderers.  Applications decide which facts are warnings versus errors and
+keep application-specific checks such as RSS/plugin health, moderation rights,
+RTBL and backup policy local.

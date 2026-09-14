@@ -53,6 +53,91 @@ class HealthSnapshot:
         return tuple(key for key, check in self.checks.items() if check.needs_attention)
 
 
+def health_check_from_messages(
+    key: str,
+    summary: str,
+    *,
+    problems: Iterable[str] = (),
+    warnings: Iterable[str] = (),
+    notes: Iterable[str] = (),
+    data: Mapping[str, Any] | None = None,
+) -> HealthCheck:
+    """Build a health check from application-owned diagnostic messages.
+
+    Applications retain policy over which facts are problems, warnings, or
+    notes. The shared layer only applies the common severity convention and
+    stores the normalized message tuples for status/report renderers.
+    """
+    problem_items = tuple(str(item) for item in problems)
+    warning_items = tuple(str(item) for item in warnings)
+    note_items = tuple(str(item) for item in notes)
+    status: HealthStatus
+    if problem_items:
+        status = "error"
+    elif warning_items:
+        status = "warning"
+    else:
+        status = "ok"
+    details = dict(data or {})
+    details.update(
+        problems=problem_items,
+        warnings=warning_items,
+        notes=note_items,
+    )
+    return HealthCheck(key, status, summary, details)
+
+
+def health_snapshot_messages(
+    snapshot: HealthSnapshot,
+) -> tuple[list[str], list[str], list[str]]:
+    """Flatten structured problem/warning/note messages in check order."""
+    problems: list[str] = []
+    warnings: list[str] = []
+    notes: list[str] = []
+    for check in snapshot.checks.values():
+        check_problems = tuple(check.data.get("problems", ()))
+        problems.extend(str(item) for item in check_problems)
+        warnings.extend(str(item) for item in check.data.get("warnings", ()))
+        notes.extend(str(item) for item in check.data.get("notes", ()))
+        if check.status == "error" and not check_problems and check.error:
+            problems.append(f"{check.key} health check failed: {check.error}")
+    return problems, warnings, notes
+
+
+@dataclass(frozen=True)
+class RoomJoinHealthState:
+    """Policy-neutral configured/expected/joined room-set diagnostics."""
+
+    configured_rooms: tuple[str, ...]
+    expected_rooms: tuple[str, ...]
+    joined_rooms: tuple[str, ...]
+    missing_expected: tuple[str, ...]
+    runtime_only: tuple[str, ...]
+
+    @property
+    def expected_joined(self) -> int:
+        return len(self.expected_rooms) - len(self.missing_expected)
+
+
+def analyze_room_join_state(
+    *,
+    configured: Iterable[str],
+    joined: Iterable[str],
+    expected: Iterable[str] | None = None,
+) -> RoomJoinHealthState:
+    """Normalize room inventory sets without imposing application policy."""
+    configured_set = {str(room) for room in configured if str(room)}
+    joined_set = {str(room) for room in joined if str(room)}
+    expected_set = configured_set if expected is None else {str(room) for room in expected if str(room)}
+    return RoomJoinHealthState(
+        configured_rooms=tuple(sorted(configured_set)),
+        expected_rooms=tuple(sorted(expected_set)),
+        joined_rooms=tuple(sorted(joined_set)),
+        missing_expected=tuple(sorted(expected_set - joined_set)),
+        runtime_only=tuple(sorted(joined_set - configured_set)),
+    )
+
+
 @dataclass(frozen=True)
 class TaskDiagnostic:
     """Normalized task state independent of application compatibility facades."""
@@ -160,6 +245,20 @@ def analyze_task_snapshot(items: Iterable[Any]) -> TaskHealthState:
         restarted_tasks=tuple(task for task in tasks if task.restart_count > 0 and task.status != "restarting"),
         open_circuits=tuple(task for task in tasks if task.circuit_state == "open"),
     )
+
+
+def supervisor_task_health_state(
+    supervisor: Any,
+    *,
+    include_done: bool = True,
+) -> TaskHealthState | None:
+    """Read and normalize a compatible task supervisor snapshot."""
+    if supervisor is None:
+        return None
+    snapshot = getattr(supervisor, "snapshot", None)
+    if not callable(snapshot):
+        return None
+    return analyze_task_snapshot(snapshot(include_done=include_done))
 
 
 @dataclass(frozen=True)

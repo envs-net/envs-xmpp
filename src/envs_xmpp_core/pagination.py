@@ -18,6 +18,69 @@ class PageSlice[T]:
     page_size: int
 
 
+
+@dataclass(frozen=True)
+class PageRequest:
+    """Shared optional page selector used by operator commands."""
+
+    page: int = 1
+    all: bool = False
+    page_size: int | None = None
+
+
+def parse_page_request(
+    args: Sequence[str],
+    *,
+    default: PageRequest | None = None,
+) -> tuple[PageRequest, list[str]]:
+    """Parse one leading ``all|last|<page>`` token and return leftovers."""
+    remaining = [str(value).strip() for value in args if str(value).strip()]
+    fallback = default or PageRequest()
+    if not remaining:
+        return fallback, []
+    token = remaining[0].lower()
+    if token == "all":
+        return PageRequest(all=True, page_size=fallback.page_size), remaining[1:]
+    if token == "last":
+        return PageRequest(page=-1, page_size=fallback.page_size), remaining[1:]
+    try:
+        page = int(token)
+    except ValueError:
+        return fallback, remaining
+    if page < 1:
+        return fallback, remaining
+    return PageRequest(page=page, page_size=fallback.page_size), remaining[1:]
+
+
+def format_page(
+    title: str,
+    entries: Sequence[str] | Iterable[str],
+    *,
+    page_request: PageRequest | None = None,
+    page_size: int = 10,
+    command_hint: str | None = None,
+    preamble: Sequence[str] | Iterable[str] = (),
+) -> list[str]:
+    """Render a title, persistent preamble, and paginated operator entries."""
+    request = page_request or PageRequest()
+    materialized = list(entries)
+    preamble_rows = list(preamble)
+    if request.all:
+        return [title, *preamble_rows, *(materialized or ["—"])]
+
+    effective_page_size = request.page_size if request.page_size is not None else page_size
+    result = paginate(
+        materialized,
+        page=request.page,
+        page_size=effective_page_size,
+        last_page_sentinel=-1,
+    )
+    suffix = f" (page {result.page}/{result.total_pages})" if result.total_pages > 1 else ""
+    lines = [title + suffix, *preamble_rows, *(result.items or ["—"])]
+    if result.total_pages > 1 and command_hint:
+        lines.append(f"Use {command_hint} <page|last|all> for more.")
+    return lines
+
 def resolve_page(
     page: int,
     *,

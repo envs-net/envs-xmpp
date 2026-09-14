@@ -33,3 +33,12 @@ For future consolidation work:
 7. remove duplicate implementation only after both consumers are proven equivalent.
 
 This policy deliberately favors a stable 1.x API and small application adapters over continuous repository-wide refactoring.
+
+## Adapter seams are not duplication
+
+Consumer repositories may retain very small wrapper functions around
+`envs_xmpp_core`/`envs_xmpp_ops` primitives when those wrappers are useful
+monkeypatch or policy-injection seams.  A wrapper should not reimplement the
+mechanism: parsing, retry logic, Git/systemd behavior, health normalization and
+state transitions remain in the shared package.  This keeps consumer tests
+simple without creating a second implementation to maintain.

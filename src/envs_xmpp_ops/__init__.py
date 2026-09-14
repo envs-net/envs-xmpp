@@ -2,6 +2,7 @@
 
 from envs_xmpp_core import __version__
 
+from .deploy import DeploymentTarget
 from .layout import (
     deployment_environment,
     resolve_environment_path,
@@ -17,6 +18,7 @@ from .profile import DeploymentProfile
 
 __all__ = [
     "DeploymentProfile",
+    "DeploymentTarget",
     "__version__",
     "deployment_environment",
     "resolve_environment_path",

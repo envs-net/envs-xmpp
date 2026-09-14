@@ -1,13 +1,27 @@
-"""Contract tests for the stable 1.0 public convenience imports."""
+"""Contract tests for the stable 1.x public convenience imports."""
 
 from envs_xmpp_core import __version__
 from envs_xmpp_core.runtime import (
     AlertTracker,
+    CooldownDecision,
     DiagnosticError,
+    HealthCheck,
+    HealthSnapshot,
+    KeyedCooldown,
+    RoomJoinHealthState,
+    SessionLifecycleSnapshot,
+    SessionLifecycleState,
+    TaskHealthState,
     TransitionAlertState,
+    WatchdogHealthState,
+    analyze_room_join_state,
     diagnostic_error,
     diagnostic_payload,
     exception_summary,
+    health_check_from_messages,
+    health_snapshot_messages,
+    supervisor_task_health_state,
+    watchdog_health_state,
 )
 from envs_xmpp_core.storage import (
     AsyncConnectionOutboxDatabase,
@@ -17,6 +31,8 @@ from envs_xmpp_core.storage import (
     retry_delay_seconds,
 )
 from envs_xmpp_core.xmpp import (
+    AffiliationQueryOptions,
+    AffiliationQueryResult,
     AvatarPayload,
     MessageTarget,
     MessageTargetKind,
@@ -32,6 +48,9 @@ from envs_xmpp_core.xmpp import (
     find_occupant_by_jid,
     find_occupant_by_nick,
     find_self_occupant,
+    iq_error_condition,
+    iq_error_summary,
+    iq_error_text,
     join_muc_confirmed,
     load_avatar_payload,
     normalize_affiliation,
@@ -42,6 +61,7 @@ from envs_xmpp_core.xmpp import (
     occupant_is_moderator,
     occupant_snapshot,
     publish_xep0084_avatar,
+    query_muc_affiliation,
     set_presence_avatar_hash,
     start_muc_join_task,
     target_is_muc_room,
@@ -50,6 +70,7 @@ from envs_xmpp_core.xmpp import (
 )
 from envs_xmpp_ops import (
     DeploymentProfile,
+    DeploymentTarget,
     deployment_environment,
     resolve_environment_path,
     service_account,
@@ -62,23 +83,39 @@ from envs_xmpp_ops import (
 )
 
 
-def test_distribution_version_is_1_0() -> None:
-    assert __version__ == "1.0.0"
+def test_distribution_version_is_1_1() -> None:
+    assert __version__ == "1.1.0"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:
     exported = (
         AlertTracker,
+        CooldownDecision,
         DiagnosticError,
+        HealthCheck,
+        HealthSnapshot,
+        KeyedCooldown,
+        RoomJoinHealthState,
+        TaskHealthState,
         TransitionAlertState,
+        WatchdogHealthState,
+        analyze_room_join_state,
+        SessionLifecycleSnapshot,
+        SessionLifecycleState,
         diagnostic_error,
         diagnostic_payload,
         exception_summary,
+        health_check_from_messages,
+        health_snapshot_messages,
+        supervisor_task_health_state,
+        watchdog_health_state,
         AsyncConnectionOutboxDatabase,
         OutboxCapacityError,
         OutboxMessage,
         OutboxStore,
         retry_delay_seconds,
+        AffiliationQueryOptions,
+        AffiliationQueryResult,
         AvatarPayload,
         MessageTarget,
         MessageTargetKind,
@@ -94,7 +131,13 @@ def test_stable_convenience_imports_are_exposed() -> None:
         find_occupant_by_jid,
         find_occupant_by_nick,
         find_self_occupant,
-        join_muc_confirmed,
+        iq_error_condition,
+        iq_error_summary,
+        iq_error_text,
+        iq_error_condition,
+    iq_error_summary,
+    iq_error_text,
+    join_muc_confirmed,
         load_avatar_payload,
         normalize_affiliation,
         normalize_avatar_media_type,
@@ -104,12 +147,14 @@ def test_stable_convenience_imports_are_exposed() -> None:
         occupant_is_moderator,
         occupant_snapshot,
         publish_xep0084_avatar,
+        query_muc_affiliation,
         set_presence_avatar_hash,
         start_muc_join_task,
         target_is_muc_room,
         wait_for_muc_self_presence,
         xmpp_strict_active,
         DeploymentProfile,
+        DeploymentTarget,
         deployment_environment,
         resolve_environment_path,
         service_account,

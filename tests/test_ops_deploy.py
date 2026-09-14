@@ -691,3 +691,25 @@ def test_systemd_unit_install_removes_invalid_new_unit(tmp_path: Path):
 
     assert not unit.exists()
     assert errors == [f"REMOVE invalid newly created unit {unit}"]
+
+
+def test_deployment_target_owns_common_venv_and_environment_helpers(tmp_path):
+    from envs_xmpp_ops.deploy import DeploymentTarget
+
+    target = DeploymentTarget(
+        root=tmp_path,
+        venv=tmp_path / ".venv",
+        config=tmp_path / "config.py",
+        service="example.service",
+        service_user="example",
+        service_group="example",
+        unit=tmp_path / "example.service",
+        python="python3",
+    )
+
+    assert target.pip == tmp_path / ".venv" / "bin" / "pip"
+    assert target.venv_python == tmp_path / ".venv" / "bin" / "python"
+    assert target.binary("example") == tmp_path / ".venv" / "bin" / "example"
+    environment = target.environment_for("EXAMPLE_CONFIG", disable_bytecode=True)
+    assert environment["EXAMPLE_CONFIG"] == str(tmp_path / "config.py")
+    assert environment["PYTHONDONTWRITEBYTECODE"] == "1"

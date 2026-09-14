@@ -12,7 +12,13 @@ from envs_xmpp_core.release.versions import compare_versions
 from envs_xmpp_core.storage.files import atomic_write_text, sha256_file
 from envs_xmpp_core.xmpp.connection import connect_kwargs
 from envs_xmpp_core.xmpp.jid import bare_jid, build_client_jid
-from envs_xmpp_core.xmpp.stanza import safe_get_plugin, safe_plugin_value
+from envs_xmpp_core.xmpp.stanza import (
+    iq_error_condition,
+    iq_error_summary,
+    iq_error_text,
+    safe_get_plugin,
+    safe_plugin_value,
+)
 
 
 def test_jid_helpers():
@@ -195,3 +201,26 @@ def test_public_package_versions_stay_in_sync() -> None:
         (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
     )
     assert core_version == ops_version == project["project"]["version"]
+
+
+def test_iq_error_helpers_never_stringify_raw_stanza():
+    class FakeIqError(Exception):
+        condition = "forbidden"
+        text = "not allowed"
+
+        def __str__(self):
+            return "<iq secret='raw-stanza'/>"
+
+    exc = FakeIqError()
+    assert iq_error_condition(exc) == "forbidden"
+    assert iq_error_text(exc) == "not allowed"
+    assert iq_error_summary(exc) == "IQ error forbidden: not allowed"
+    assert "raw-stanza" not in iq_error_summary(exc)
+
+
+def test_iq_timeout_summary_is_stanza_safe():
+    class IqTimeout(Exception):
+        def __str__(self):
+            return "<iq secret='raw-stanza'/>"
+
+    assert iq_error_summary(IqTimeout()) == "IQ timeout"

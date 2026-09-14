@@ -42,6 +42,11 @@ def is_stable_release_tag(tag: str) -> bool:
     return _STABLE_RELEASE_TAG.fullmatch(tag) is not None
 
 
+
+def stable_release_tags(tags: list[str] | tuple[str, ...] | set[str]) -> list[str]:
+    """Return stable ``vX.Y.Z`` tags while preserving input order."""
+    return [str(tag) for tag in tags if is_stable_release_tag(str(tag))]
+
 def describe_revision(run_git_command: GitRunner) -> str:
     """Return the operator-facing current revision description."""
     result = run_git_command(

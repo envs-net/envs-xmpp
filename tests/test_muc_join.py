@@ -156,6 +156,75 @@ def test_start_muc_join_task_falls_back_to_join_muc() -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_muc_join_task_normalizes_modern_waiter_presence_options() -> None:
+    calls: list[tuple[str, str, object, int | None, float]] = []
+
+    class Muc:
+        async def join_muc_wait(
+            self,
+            room: str,
+            nick: str,
+            *,
+            presence_options=None,
+            maxstanzas: int | None = None,
+            timeout: float = 300,
+        ) -> None:
+            calls.append((room, nick, presence_options, maxstanzas, timeout))
+
+    task, api = start_muc_join_task(
+        Muc(),
+        "room@example.org",
+        "bot",
+        timeout=12,
+        join_kwargs={"pshow": "away", "pstatus": "maintenance"},
+    )
+
+    assert task is not None
+    assert api == "join_muc_wait"
+    assert calls == []
+
+    await task
+    assert calls == [
+        (
+            "room@example.org",
+            "bot",
+            {"pshow": "away", "pstatus": "maintenance"},
+            0,
+            12.0,
+        )
+    ]
+
+
+def test_start_muc_join_task_typeerror_retry_keeps_history_disabled() -> None:
+    calls: list[dict[str, object]] = []
+
+    class Muc:
+        def join_muc_wait(self, room: str, nick: str, **kwargs):
+            calls.append(dict(kwargs))
+            if "presence_options" in kwargs:
+                raise TypeError("presence_options unsupported")
+
+    task, api = start_muc_join_task(
+        Muc(),
+        "room@example.org",
+        "bot",
+        timeout=7,
+        join_kwargs={"pshow": "chat"},
+    )
+
+    assert task is None
+    assert api == "join_muc_wait"
+    assert calls == [
+        {
+            "presence_options": {"pshow": "chat"},
+            "maxstanzas": 0,
+            "timeout": 7.0,
+        },
+        {"maxstanzas": 0, "timeout": 7.0},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_drain_task_returns_failure() -> None:
     async def fail() -> None:
         raise RuntimeError("boom")

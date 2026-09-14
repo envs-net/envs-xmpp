@@ -60,13 +60,46 @@ def start_muc_join_task(
     join_wait = getattr(muc_plugin, "join_muc_wait", None)
     kwargs = dict(join_kwargs or {})
     if callable(join_wait):
+        # ``join_muc()`` accepts presence fields such as ``pshow`` and
+        # ``pstatus`` directly, while modern ``join_muc_wait()`` expects them
+        # inside ``presence_options``.  Passing the legacy shape to current
+        # Slixmpp raises TypeError.  The old compatibility fallback used to
+        # retry without *any* keyword arguments, which also dropped
+        # ``maxstanzas=0`` and could therefore replay MUC history after every
+        # reconnect.  Normalize the presence fields before calling the modern
+        # waiter and keep the no-history request on every compatible retry.
+        presence_keys = {
+            "pshow",
+            "pstatus",
+            "ppriority",
+            "pfrom",
+            "ptype",
+            "pnick",
+        }
+        presence_options = dict(kwargs.pop("presence_options", {}) or {})
+        for key in tuple(presence_keys):
+            if key in kwargs:
+                presence_options.setdefault(key, kwargs.pop(key))
+        if presence_options:
+            kwargs["presence_options"] = presence_options
         kwargs.setdefault("maxstanzas", 0)
         kwargs.setdefault("timeout", _timeout_seconds(timeout))
         try:
             result = join_wait(room, nick, **kwargs)
         except TypeError:
-            # Older/test-double implementations may only accept room+nick.
-            result = join_wait(room, nick)
+            # A compatibility implementation may not understand
+            # ``presence_options`` but still support the standard history and
+            # timeout arguments.  Preserve the no-history invariant before
+            # falling back to the minimal room+nick call used by very small
+            # test doubles or ancient implementations.
+            minimal_kwargs = {
+                "maxstanzas": kwargs.get("maxstanzas", 0),
+                "timeout": kwargs.get("timeout", _timeout_seconds(timeout)),
+            }
+            try:
+                result = join_wait(room, nick, **minimal_kwargs)
+            except TypeError:
+                result = join_wait(room, nick)
         api_name = "join_muc_wait"
     else:
         result = muc_plugin.join_muc(room, nick, **(join_kwargs or {}))

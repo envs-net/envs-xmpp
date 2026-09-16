@@ -15,6 +15,7 @@ from .avatar import (
     set_presence_avatar_hash,
     xmpp_strict_active,
 )
+from .jid import bare_jid, normalize_jid_text
 from .messaging import (
     MUC_FEATURE,
     MessageTarget,
@@ -70,6 +71,7 @@ __all__ = [
     "TaskLocalReplyRoute",
     "avatar_sha1",
     "await_muc_join_compat",
+    "bare_jid",
     "cache_xep0153_hash",
     "classify_message_target",
     "disco_muc_status",
@@ -89,6 +91,7 @@ __all__ = [
     "looks_like_bare_room_jid",
     "normalize_affiliation",
     "normalize_avatar_media_type",
+    "normalize_jid_text",
     "normalize_message_type",
     "normalize_role",
     "occupant_from_mapping",

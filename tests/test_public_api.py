@@ -43,6 +43,7 @@ from envs_xmpp_core.xmpp import (
     TaskLocalReplyRoute,
     avatar_sha1,
     await_muc_join_compat,
+    bare_jid,
     cache_xep0153_hash,
     classify_message_target,
     find_occupant_by_jid,
@@ -55,6 +56,7 @@ from envs_xmpp_core.xmpp import (
     load_avatar_payload,
     normalize_affiliation,
     normalize_avatar_media_type,
+    normalize_jid_text,
     normalize_message_type,
     normalize_role,
     occupant_is_admin_or_owner,
@@ -86,8 +88,8 @@ from envs_xmpp_ops import (
 )
 
 
-def test_distribution_version_is_1_1_1() -> None:
-    assert __version__ == "1.1.1"
+def test_distribution_version_is_1_2_0() -> None:
+    assert __version__ == "1.2.0"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:
@@ -128,6 +130,7 @@ def test_stable_convenience_imports_are_exposed() -> None:
         ReplyRoute,
         TaskLocalReplyRoute,
         avatar_sha1,
+        bare_jid,
         await_muc_join_compat,
         cache_xep0153_hash,
         classify_message_target,
@@ -140,6 +143,7 @@ def test_stable_convenience_imports_are_exposed() -> None:
         join_muc_confirmed,
         load_avatar_payload,
         normalize_affiliation,
+        normalize_jid_text,
         normalize_avatar_media_type,
         normalize_message_type,
         normalize_role,

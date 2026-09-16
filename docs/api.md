@@ -12,6 +12,14 @@ from envs_xmpp_core import __version__
 
 Package-level convenience imports are available from `envs_xmpp_core.xmpp` for the most commonly shared operations.
 
+### JID text normalization
+
+```python
+from envs_xmpp_core.xmpp import bare_jid, normalize_jid_text
+```
+
+`normalize_jid_text()` removes surrounding whitespace plus the known copy/paste presentation artifacts U+200B ZERO WIDTH SPACE and U+FEFF ZERO WIDTH NO-BREAK SPACE/BOM. It intentionally does not lowercase, validate, or remove a resource. `bare_jid()` layers the shared best-effort bare-JID comparison semantics on top by removing the resource and lowercasing the result. Strict JID validation remains application-owned.
+
 ### Avatar/profile
 
 ```python

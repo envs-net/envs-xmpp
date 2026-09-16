@@ -11,7 +11,7 @@ from envs_xmpp_core.release.github import github_api_url_from_release_url, relea
 from envs_xmpp_core.release.versions import compare_versions
 from envs_xmpp_core.storage.files import atomic_write_text, sha256_file
 from envs_xmpp_core.xmpp.connection import connect_kwargs
-from envs_xmpp_core.xmpp.jid import bare_jid, build_client_jid
+from envs_xmpp_core.xmpp.jid import bare_jid, build_client_jid, configured_jid_domain, normalize_jid_text
 from envs_xmpp_core.xmpp.stanza import (
     iq_error_condition,
     iq_error_summary,
@@ -23,6 +23,15 @@ from envs_xmpp_core.xmpp.stanza import (
 
 def test_jid_helpers():
     assert bare_jid("User@Example.org/res") == "user@example.org"
+    assert bare_jid(" User@\u200bExample.org/Phone ") == "user@example.org"
+    assert bare_jid("User@\ufeffExample.org") == "user@example.org"
+    assert bare_jid(None) is None
+    assert bare_jid("   ") is None
+    assert normalize_jid_text(" User@\u200bExample.org/Phone ") == "User@Example.org/Phone"
+    assert normalize_jid_text("Nick\u200bName") == "NickName"
+    assert normalize_jid_text(None) is None
+    assert normalize_jid_text("   ") is None
+    assert configured_jid_domain({"jid": "Bot@\u200bExample.Org/Phone"}) == "Example.Org"
     assert build_client_jid("bot@example.org/old", "new") == "bot@example.org/new"
 
 

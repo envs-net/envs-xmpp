@@ -82,6 +82,7 @@ src/
 │   └── xmpp/
 │       ├── affiliations.py
 │       ├── avatar.py
+│       ├── jid.py
 │       ├── messaging.py
 │       ├── muc_join.py
 │       └── occupants.py
@@ -110,7 +111,7 @@ supported, so existing consumers do not have to migrate immediately.
 The stable shared layer now covers avatar/profile publication, confirmed MUC
 joins, normalized occupant identity, message-target/reply routing, durable
 outbox storage, operational alert state, redacted diagnostics and deployment
-layout discovery. Version 1.1 adds the shared operator-presentation models and renderers for task, status and room inventories. Current development additionally shares XMPP session-generation telemetry and bounded MUC affiliation IQ mechanics while keeping reconnect scheduling and bot policy in the applications. Bot-specific policy, command behavior, moderation, OMEMO, plugin systems and notification wording intentionally remain outside the core.
+layout discovery. Version 1.1 adds the shared operator-presentation models and renderers for task, status and room inventories. Version 1.2 adds shared JID text normalization, including deliberately narrow cleanup of U+200B/U+FEFF copy/paste artifacts before best-effort bare-JID comparison. The 1.x line also shares XMPP session-generation telemetry and bounded MUC affiliation IQ mechanics while keeping strict JID validation, reconnect scheduling and bot policy in the applications. Bot-specific policy, command behavior, moderation, OMEMO, plugin systems and notification wording intentionally remain outside the core.
 
 `envs_xmpp_ops` is designed for thin bot-specific deployment frontends. The
 frontends subclass the shared `DeploymentTarget` for common checkout/venv/config/

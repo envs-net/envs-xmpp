@@ -25,7 +25,7 @@ This keeps runtime and deployment contracts on one version while preserving a cl
 
 ## Core domains
 
-`envs_xmpp_core.xmpp` owns protocol/mechanism helpers such as confirmed MUC joins, occupant normalization, routing and avatar publication.
+`envs_xmpp_core.xmpp` owns protocol/mechanism helpers such as deliberately narrow JID text normalization, confirmed MUC joins, occupant normalization, routing and avatar publication. Strict JID validation remains application-owned.
 
 `envs_xmpp_core.runtime` owns task supervision, watchdog/lifecycle/health helpers, alerts and safe diagnostics.
 

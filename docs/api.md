@@ -107,7 +107,7 @@ The applications still collect their own runtime data and own authorization, hea
 
 ## Runtime
 
-Convenience imports from `envs_xmpp_core.runtime` include alert and diagnostic primitives:
+Convenience imports from `envs_xmpp_core.runtime` include alert, diagnostic, session, and reconnect primitives:
 
 ```python
 from envs_xmpp_core.runtime import (
@@ -115,8 +115,15 @@ from envs_xmpp_core.runtime import (
     CooldownDecision,
     SessionLifecycleState,
     diagnostic_payload,
+    run_reconnect_loop,
 )
 ```
+
+### Reconnect retry/backoff
+
+`run_reconnect_loop()` owns the shared technical reconnect transaction used by both bots. It waits before transport retries, avoids opening a second connection when `session_start` wins a backoff race, waits for full application readiness instead of treating TCP connection as success, retries after a bounded readiness timeout, and stops when process shutdown begins.
+
+Consumers inject `connect`, `disconnect_partial`, `session_started`, `shutdown_requested`, and `startup_completed` callbacks plus an `asyncio.Event` that is set only after the bot-specific session startup path is fully ready. Room reconciliation, worker lifecycle, alerts, and other recovery policy remain application-owned.
 
 Documented direct modules provide the broader runtime toolkit:
 

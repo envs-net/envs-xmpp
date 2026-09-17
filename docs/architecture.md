@@ -27,7 +27,7 @@ This keeps runtime and deployment contracts on one version while preserving a cl
 
 `envs_xmpp_core.xmpp` owns protocol/mechanism helpers such as deliberately narrow JID text normalization, confirmed MUC joins, occupant normalization, routing and avatar publication. Strict JID validation remains application-owned.
 
-`envs_xmpp_core.runtime` owns task supervision, watchdog/lifecycle/health helpers, alerts and safe diagnostics.
+`envs_xmpp_core.runtime` owns task supervision, watchdog/lifecycle/health helpers, alerts, safe diagnostics, and the policy-neutral reconnect retry/backoff transaction.
 
 `envs_xmpp_core.storage` owns generic SQLite/archive/backup/restore/outbox mechanisms without defining an application's schema or retention policy.
 
@@ -51,6 +51,7 @@ The following remain local by design:
 - plugin systems and feature modules;
 - application database schemas;
 - concrete health severity decisions and recovery policy;
+- disconnect cleanup, room/state reconciliation and the definition of "ready" after reconnect;
 - service-specific configuration defaults;
 - operator notifications and room policy.
 

@@ -14,6 +14,7 @@ from .health import (
     supervisor_task_health_state,
     watchdog_health_state,
 )
+from .reconnect import run_reconnect_loop
 from .session import SessionLifecycleSnapshot, SessionLifecycleState
 from .suppression import CooldownDecision, KeyedCooldown
 
@@ -36,6 +37,7 @@ __all__ = [
     "exception_summary",
     "health_check_from_messages",
     "health_snapshot_messages",
+    "run_reconnect_loop",
     "supervisor_task_health_state",
     "watchdog_health_state",
 ]

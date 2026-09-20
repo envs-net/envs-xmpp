@@ -248,6 +248,13 @@ bootstrap agree on the installed envs-xmpp version. It is intended as a project
 validation step before tagging; it deliberately does not require consumer
 package versions to be bumped during development.
 
+`envs_xmpp_ops.release` exposes `ReleaseTagSpec`, `WheelAsset`,
+`WheelCheckSpec`, `check_release_tag()`, `inspect_wheel()` and the small CLI
+adapters used by consumer repository wrappers. The wheel checker validates
+canonical asset hashes, required wheel members and console-script metadata,
+then performs an isolated install, `pip check`, optional runtime asset resolution
+and an installed `--version` smoke test.
+
 ## Dependency drift
 
 `envs_xmpp_ops.inspect_dependency_drift()` compares runtime dependencies in a virtualenv with exact reviewed constraint pins.

@@ -62,3 +62,14 @@ constraint snapshots and the deploy bootstrap all agree with the installed
 tag or production deployment. Consumer package versions are deliberately not
 part of this check and can remain unchanged while a release is still being
 assembled.
+
+## Shared release verification
+
+`envs_xmpp_ops.release` provides the mechanism used by both bot repositories
+for release-tag and wheel checks. Consumers declare only their version source,
+distribution/wheel name, console entry point, required packaged members and
+canonical runtime assets. The shared checker verifies the tag/version match,
+asset hashes and entry-point metadata, then installs the wheel in a fresh
+virtualenv, runs `pip check`, resolves declared runtime assets and exercises the
+installed CLI with `--version`. Bot-specific release policy stays in the bot
+repositories.

@@ -89,8 +89,8 @@ from envs_xmpp_ops import (
 )
 
 
-def test_distribution_version_is_1_3_0() -> None:
-    assert __version__ == "1.3.0"
+def test_distribution_version_is_1_4_0() -> None:
+    assert __version__ == "1.4.0"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:

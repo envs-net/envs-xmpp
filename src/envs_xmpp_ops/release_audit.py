@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import re
 import sys
 import tomllib
@@ -11,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from envs_xmpp_core import __version__ as envs_xmpp_version
+
+from .release import read_python_assignment
 
 _DEPENDENCY_NAME = "envs-xmpp"
 
@@ -29,22 +30,6 @@ class SharedCoreReleaseAudit:
     @property
     def ok(self) -> bool:
         return not self.errors
-
-
-def _python_assignment(path: Path, name: str) -> str | None:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in tree.body:
-        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-            continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        if not any(isinstance(target, ast.Name) and target.id == name for target in targets):
-            continue
-        if node.value is None:
-            continue
-        value = ast.literal_eval(node.value)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
 
 
 def _pyproject_requirement(path: Path) -> str | None:
@@ -106,7 +91,12 @@ def audit_shared_core_release_state(
         for relative in constraint_paths
     )
     bootstrap_file = project_root / bootstrap_path
-    bootstrap = _python_assignment(bootstrap_file, "_REQUIRED_VERSION") if bootstrap_file.is_file() else None
+    bootstrap: str | None = None
+    if bootstrap_file.is_file():
+        try:
+            bootstrap = read_python_assignment(bootstrap_file, "_REQUIRED_VERSION")
+        except RuntimeError:
+            bootstrap = None
 
     errors: list[str] = []
     if not _requirement_has_version(pyproject, expected):

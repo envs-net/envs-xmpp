@@ -8,6 +8,7 @@ from envs_xmpp_ops.regression import (
     check_coverage,
     check_mutation,
     check_mutation_tool,
+    load_baseline,
     mutation_delta,
     read_mutation_results,
 )
@@ -49,6 +50,98 @@ def _mutations(root: Path, values: dict[str, int | None]) -> None:
     path = root / "mutants" / "pkg.py.meta"
     path.parent.mkdir()
     path.write_text(json.dumps({"exit_code_by_key": values}), encoding="utf-8")
+
+
+def test_load_baseline_validates_mutmut_version_and_defaults_allowed_drop(tmp_path):
+    path = tmp_path / "baseline.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": 2,
+                "coverage": {"percent": 91.25},
+                "mutation": {
+                    "mutmut_version": " 3.8.0 ",
+                    "accepted_survivors": ["one", 2],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    baseline = load_baseline(path)
+
+    assert baseline.coverage_percent == 91.25
+    assert baseline.coverage_allowed_drop == 0.0
+    assert baseline.mutmut_version == "3.8.0"
+    assert baseline.accepted_survivors == frozenset({"one", "2"})
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw["mutation"]["mutmut_version"] = 380
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError) as excinfo:
+        load_baseline(path)
+    assert str(excinfo.value) == "mutation.mutmut_version must be a non-empty string"
+
+
+def test_mutation_tool_gate_reports_exact_success_and_failure(tmp_path, monkeypatch):
+    root = _project(tmp_path, survivors=[], mutmut_version="3.8.0")
+    monkeypatch.setattr("envs_xmpp_ops.regression.installed_mutmut_version", lambda: "3.8.0")
+
+    ok, message = check_mutation_tool(root)
+    assert ok is True
+    assert message == (
+        "Mutation tool gate passed: mutmut 3.8.0 installed, "
+        "baseline requires 3.8.0."
+    )
+
+    monkeypatch.setattr("envs_xmpp_ops.regression.installed_mutmut_version", lambda: "3.8.1")
+    ok, message = check_mutation_tool(root)
+    assert ok is False
+    assert message == (
+        "Mutation tool gate FAILED: mutmut 3.8.1 installed, "
+        "baseline requires 3.8.0."
+    )
+
+
+def test_mutation_gate_reports_counts_deltas_and_blockers_exactly(tmp_path, monkeypatch):
+    root = _project(tmp_path, survivors=["known", "resolved"])
+    monkeypatch.setattr("envs_xmpp_ops.regression.installed_mutmut_version", lambda: "3.8.0")
+    _mutations(
+        root,
+        {
+            "known": 0,
+            "new": 0,
+            "killed": 1,
+            "timeout": 24,
+        },
+    )
+
+    ok, message = check_mutation(root)
+
+    assert ok is False
+    assert message == (
+        "Mutation results: killed=1, survived=2, timeout=1.\n"
+        "Blocking mutation results:\n"
+        "  timeout: timeout\n"
+        "New survivors (review tests or explicitly accept after review):\n"
+        "  new\n"
+        "Resolved accepted survivors: 1\n"
+        "Mutation regression gate FAILED."
+    )
+
+
+def test_mutation_gate_reports_clean_pass_exactly(tmp_path, monkeypatch):
+    root = _project(tmp_path, survivors=["known"])
+    monkeypatch.setattr("envs_xmpp_ops.regression.installed_mutmut_version", lambda: "3.8.0")
+    _mutations(root, {"known": 0, "killed": 1})
+
+    ok, message = check_mutation(root)
+
+    assert ok is True
+    assert message == (
+        "Mutation results: killed=1, survived=1.\n"
+        "Mutation regression gate passed."
+    )
 
 
 def test_coverage_delta_allows_configured_drop(tmp_path):
@@ -99,7 +192,7 @@ def test_mutation_gate_requires_initialized_baseline(tmp_path, monkeypatch):
     monkeypatch.setattr("envs_xmpp_ops.regression.installed_mutmut_version", lambda: "3.8.0")
     ok, message = check_mutation(root)
     assert ok is False
-    assert "not initialized" in message
+    assert message == "Mutation regression gate FAILED: accepted survivor baseline is not initialized."
 
 
 def test_mutation_tool_gate_rejects_version_mismatch(tmp_path, monkeypatch):
@@ -129,6 +222,7 @@ def test_accept_mutation_baseline_records_only_survivors(tmp_path, monkeypatch):
     baseline = json.loads((root / "tests" / "regression-baseline.json").read_text(encoding="utf-8"))
     assert baseline["mutation"]["accepted_survivors"] == ["survivor"]
     assert baseline["mutation"]["mutmut_version"] == "3.8.1"
+    assert baseline["coverage"] == {"percent": 90.0, "allowed_drop": 0.5}
 
 
 def test_accept_mutation_baseline_refuses_blockers(tmp_path):

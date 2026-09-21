@@ -16,11 +16,13 @@ fi
 case "$command" in
     fresh)
         python scripts/check_dev_tools.py mutation
+        python -m envs_xmpp_ops.regression mutation-tool-check
         rm -rf mutants
         exec mutmut run "$@"
         ;;
     run|results|browse)
         python scripts/check_dev_tools.py mutation
+        python -m envs_xmpp_ops.regression mutation-tool-check
         exec mutmut "$command" "$@"
         ;;
     check)

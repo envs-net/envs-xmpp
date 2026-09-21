@@ -7,10 +7,11 @@ import json
 import tomllib
 from collections import Counter
 from dataclasses import dataclass
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-_BASELINE_SCHEMA = 1
+_BASELINE_SCHEMA = 2
 _BLOCKING_MUTATION_STATUSES = frozenset(
     {"no tests", "timeout", "suspicious", "not checked", "check was interrupted by user", "segfault"}
 )
@@ -48,6 +49,7 @@ class RegressionConfig:
 class RegressionBaseline:
     coverage_percent: float
     coverage_allowed_drop: float
+    mutmut_version: str
     accepted_survivors: frozenset[str] | None
 
 
@@ -91,12 +93,16 @@ def load_baseline(path: Path) -> RegressionBaseline:
     mutation = raw.get("mutation")
     if not isinstance(coverage, dict) or not isinstance(mutation, dict):
         raise TypeError(f"invalid regression baseline structure in {path}")
+    mutmut_version = mutation.get("mutmut_version")
+    if not isinstance(mutmut_version, str) or not mutmut_version.strip():
+        raise ValueError("mutation.mutmut_version must be a non-empty string")
     survivors = mutation.get("accepted_survivors")
     if survivors is not None and not isinstance(survivors, list):
         raise ValueError("mutation.accepted_survivors must be an array or null")
     return RegressionBaseline(
         coverage_percent=float(coverage["percent"]),
         coverage_allowed_drop=float(coverage.get("allowed_drop", 0.0)),
+        mutmut_version=mutmut_version.strip(),
         accepted_survivors=None if survivors is None else frozenset(str(item) for item in survivors),
     )
 
@@ -110,9 +116,10 @@ def _write_baseline(path: Path, baseline: RegressionBaseline) -> None:
             "allowed_drop": baseline.coverage_allowed_drop,
         },
         "mutation": {
+            "mutmut_version": baseline.mutmut_version,
             "accepted_survivors": (
                 None if baseline.accepted_survivors is None else sorted(baseline.accepted_survivors)
-            )
+            ),
         },
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
@@ -173,6 +180,27 @@ def read_mutation_results(results_root: Path) -> dict[str, str]:
     return results
 
 
+
+def installed_mutmut_version() -> str:
+    try:
+        return metadata.version("mutmut")
+    except metadata.PackageNotFoundError as exc:
+        raise ValueError("mutmut is not installed") from exc
+
+
+def check_mutation_tool(root: Path = Path(".")) -> tuple[bool, str]:
+    config = load_regression_config(root)
+    baseline = load_baseline(config.baseline)
+    current = installed_mutmut_version()
+    ok = current == baseline.mutmut_version
+    status = "passed" if ok else "FAILED"
+    message = (
+        f"Mutation tool gate {status}: mutmut {current} installed, "
+        f"baseline requires {baseline.mutmut_version}."
+    )
+    return ok, message
+
+
 def mutation_delta(current: dict[str, str], accepted_survivors: frozenset[str]) -> MutationDelta:
     counts: Counter[str] = Counter(current.values())
     blockers = tuple(
@@ -190,6 +218,9 @@ def mutation_delta(current: dict[str, str], accepted_survivors: frozenset[str]) 
 def check_mutation(root: Path = Path(".")) -> tuple[bool, str]:
     config = load_regression_config(root)
     baseline = load_baseline(config.baseline)
+    tool_ok, tool_message = check_mutation_tool(root)
+    if not tool_ok:
+        return False, tool_message
     if baseline.accepted_survivors is None:
         return False, "Mutation regression gate FAILED: accepted survivor baseline is not initialized."
     current = read_mutation_results(config.mutation_results)
@@ -217,11 +248,13 @@ def accept_mutation_baseline(root: Path = Path(".")) -> str:
         details = "\n".join(f"  {status}: {name}" for name, status in blocker_items)
         raise ValueError(f"refusing to accept mutation baseline with blocking results:\n{details}")
     survivors = frozenset(name for name, status in current.items() if status == "survived")
+    current_mutmut = installed_mutmut_version()
     _write_baseline(
         config.baseline,
         RegressionBaseline(
             coverage_percent=baseline.coverage_percent,
             coverage_allowed_drop=baseline.coverage_allowed_drop,
+            mutmut_version=current_mutmut,
             accepted_survivors=survivors,
         ),
     )
@@ -237,6 +270,7 @@ def accept_coverage_baseline(root: Path = Path(".")) -> str:
         RegressionBaseline(
             coverage_percent=current,
             coverage_allowed_drop=baseline.coverage_allowed_drop,
+            mutmut_version=baseline.mutmut_version,
             accepted_survivors=baseline.accepted_survivors,
         ),
     )
@@ -247,7 +281,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
-        choices=("coverage-check", "coverage-accept", "mutation-check", "mutation-accept"),
+        choices=(
+            "coverage-check",
+            "coverage-accept",
+            "mutation-tool-check",
+            "mutation-check",
+            "mutation-accept",
+        ),
     )
     args = parser.parse_args(argv)
     try:
@@ -256,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "coverage-accept":
             print(accept_coverage_baseline())
             return 0
+        elif args.command == "mutation-tool-check":
+            ok, message = check_mutation_tool()
         elif args.command == "mutation-check":
             ok, message = check_mutation()
         else:

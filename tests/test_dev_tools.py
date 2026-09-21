@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import runpy
 import tomllib
 from pathlib import Path
@@ -22,7 +23,16 @@ def test_dev_extra_contains_quality_and_mutation_tools() -> None:
     dev = tuple(pyproject["project"]["optional-dependencies"]["dev"])
 
     assert any(requirement.startswith("pytest-cov") for requirement in dev)
-    assert any(requirement.startswith("mutmut") for requirement in dev)
+    assert "mutmut==3.8.0" in dev
+
+def test_mutmut_pin_matches_regression_baseline() -> None:
+    pyproject = tomllib.loads(ROOT.joinpath("pyproject.toml").read_text())
+    dev = tuple(pyproject["project"]["optional-dependencies"]["dev"])
+    pin = next(requirement for requirement in dev if requirement.startswith("mutmut=="))
+    baseline = json.loads(ROOT.joinpath("tests/regression-baseline.json").read_text())
+
+    assert baseline["mutation"]["mutmut_version"] == pin.removeprefix("mutmut==")
+
 
 def test_readme_development_install_includes_dev_extra() -> None:
     readme = ROOT.joinpath("README.md").read_text()
@@ -67,3 +77,4 @@ def test_shell_wrappers_run_dev_tool_preflight() -> None:
 
     assert "python scripts/check_dev_tools.py quality" in quality
     assert mutmut.count("python scripts/check_dev_tools.py mutation") == 2
+    assert mutmut.count("python -m envs_xmpp_ops.regression mutation-tool-check") == 2

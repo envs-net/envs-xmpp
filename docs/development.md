@@ -93,3 +93,4 @@ Mutation testing uses the same baseline file:
 Only reviewed survivors are baselineable. `no tests`, timeouts, suspicious results
 and unchecked mutants are hard failures. After intentionally reviewing a changed
 survivor set, update it with `./scripts/mutmut.sh accept`.
+The development extra pins the exact mutmut version recorded in the regression baseline because mutant IDs and the generated mutant set are tool-version dependent. Upgrade mutmut only together with a fresh reviewed run and baseline acceptance.

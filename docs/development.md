@@ -73,3 +73,23 @@ asset hashes and entry-point metadata, then installs the wheel in a fresh
 virtualenv, runs `pip check`, resolves declared runtime assets and exercises the
 installed CLI with `--version`. Bot-specific release policy stays in the bot
 repositories.
+
+
+## Regression baselines
+
+Coverage runs write `.coverage-regression.json` and compare the total percentage
+with `tests/regression-baseline.json`. The baseline allows only the small documented
+drop in that file; updating it requires an explicit `coverage-accept` command after
+review.
+
+Mutation testing uses the same baseline file:
+
+```bash
+./scripts/mutmut.sh fresh
+./scripts/mutmut.sh results
+./scripts/mutmut.sh check
+```
+
+Only reviewed survivors are baselineable. `no tests`, timeouts, suspicious results
+and unchecked mutants are hard failures. After intentionally reviewing a changed
+survivor set, update it with `./scripts/mutmut.sh accept`.

@@ -129,11 +129,11 @@ def run_quality(*, root: Path = Path("."), fix: bool = False, skip_tests: bool =
     else:
         print("  - no project-specific checks configured", flush=True)
 
-    print(f"[3/{steps}] Test suite (warning strict)", flush=True)
+    print(f"[3/{steps}] Test suite + coverage regression (warning strict)", flush=True)
     if skip_tests:
         print("  - skipped by request", flush=True)
     else:
-        _run([sys.executable, "-m", "envs_xmpp_ops.testing"], root=root)
+        _run([sys.executable, "-m", "envs_xmpp_ops.testing", "--coverage"], root=root)
 
     fix_args = ["--fix"] if fix else []
 

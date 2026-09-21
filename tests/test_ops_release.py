@@ -132,7 +132,7 @@ def test_smoke_test_installed_wheel_runs_assets_pip_check_and_version(tmp_path: 
             "def main():\n"
             "    import sys\n"
             "    if '--version' in sys.argv:\n"
-            "        print('demo 1.0 (envs-xmpp 1.4.0)')\n"
+            "        print('demo 1.0 (envs-xmpp 1.5.0)')\n"
             "        return 0\n"
             "    return 0\n"
         ),

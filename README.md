@@ -155,13 +155,16 @@ Trusted Publisher for `envs-net/envs-xmpp` using `.github/workflows/release.yml`
 
 `envs_xmpp_ops.quality` and `envs_xmpp_ops.testing` provide the common local
 quality/test frontends used by envsbot and muc_banbot. Project-specific source
-targets, generated-file checks, integration markers and coverage floors remain
-declarative in each repository's `pyproject.toml`; the runner behavior and gate
-ordering stay shared.
+targets, generated-file checks, integration markers, coverage floors and regression
+baseline paths remain declarative in each repository's `pyproject.toml`; the runner
+behavior and gate ordering stay shared.
 
 The quality runner enforces a common baseline: compilation, project validation,
-warning-strict tests, Ruff repository/F401/I-UP-B gates, mypy, Git whitespace
-validation and dependency audit. Consumer project validation can include
+warning-strict tests with coverage and an accepted coverage-delta gate, Ruff
+repository/F401/I-UP-B gates, mypy, Git whitespace validation and dependency audit.
+`envs_xmpp_ops.regression` also provides the shared mutmut survivor-delta gate used
+by the repositories: known survivors may be accepted, while new survivors and all
+`no tests`, timeout, suspicious, or incomplete outcomes fail. Consumer project validation can include
 `python -m envs_xmpp_ops.release_audit`, which verifies that package metadata,
 requirements, constraints and the deploy bootstrap agree on one shared-core
 version before a release is cut.

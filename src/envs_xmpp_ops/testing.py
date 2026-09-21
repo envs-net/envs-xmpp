@@ -10,13 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from envs_xmpp_ops.regression import check_coverage, load_regression_config
+
 
 @dataclass(frozen=True)
 class PytestConfig:
     marker: str | None
     coverage_source: str
     coverage_report: str
-    coverage_fail_under: int
+    coverage_fail_under: float
 
 
 def _tool_config(root: Path) -> dict[str, Any]:
@@ -39,7 +41,7 @@ def load_test_config(root: Path = Path(".")) -> PytestConfig:
         marker=marker,
         coverage_source=str(raw.get("coverage-source", ".")),
         coverage_report=str(raw.get("coverage-report", "term")),
-        coverage_fail_under=int(raw.get("coverage-fail-under", 0)),
+        coverage_fail_under=float(raw.get("coverage-fail-under", 0)),
     )
 
 
@@ -50,6 +52,7 @@ def pytest_command(
     last_failed: bool,
     durations: int | None,
     targets: list[str],
+    coverage_json: str | None = None,
 ) -> list[str]:
     command = [
         sys.executable,
@@ -74,9 +77,11 @@ def pytest_command(
             [
                 f"--cov={config.coverage_source}",
                 f"--cov-report={config.coverage_report}",
-                f"--cov-fail-under={config.coverage_fail_under}",
+                f"--cov-fail-under={config.coverage_fail_under:g}",
             ]
         )
+        if coverage_json is not None:
+            command.append(f"--cov-report=json:{coverage_json}")
     command.extend(targets)
     return command
 
@@ -91,17 +96,27 @@ def main(argv: list[str] | None = None) -> int:
     if args.durations is not None and args.durations <= 0:
         parser.error("--durations requires a positive integer")
 
-    config = load_test_config()
-    return subprocess.run(
+    root = Path(".")
+    config = load_test_config(root)
+    coverage_json: str | None = None
+    if args.coverage:
+        coverage_json = str(load_regression_config(root).coverage_json)
+    result = subprocess.run(
         pytest_command(
             config,
             coverage=args.coverage,
             last_failed=args.last_failed,
             durations=args.durations,
-            targets=pytest_args,
+            targets=pytest_args or ["tests"],
+            coverage_json=coverage_json,
         ),
         check=False,
-    ).returncode
+    )
+    if result.returncode != 0 or not args.coverage:
+        return result.returncode
+    ok, message = check_coverage(root)
+    print(message)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

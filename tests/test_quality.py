@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from envs_xmpp_ops.quality import load_quality_config
 from envs_xmpp_ops.testing import PytestConfig, load_test_config, pytest_command
@@ -29,6 +30,11 @@ marker = "not integration"
 coverage-source = "pkg"
 coverage-report = "term-missing"
 coverage-fail-under = 61
+
+[tool.envs-xmpp.regression]
+baseline = "tests/regression-baseline.json"
+mutation-results = "mutants"
+coverage-json = ".coverage-regression.json"
 """.strip()
         + "\n"
     )
@@ -91,6 +97,7 @@ def test_pytest_command_project_policy() -> None:
         last_failed=True,
         durations=10,
         targets=[],
+        coverage_json=".coverage-regression.json",
     )
 
     marker_index = len(command) - 1 - command[::-1].index("-m")
@@ -100,6 +107,7 @@ def test_pytest_command_project_policy() -> None:
     assert "--cov=banbot" in command
     assert "--cov-report=term-missing" in command
     assert "--cov-fail-under=55" in command
+    assert "--cov-report=json:.coverage-regression.json" in command
 
 def test_run_quality_uses_common_gate_order(tmp_path: Path, monkeypatch, capsys) -> None:
     from envs_xmpp_ops import quality as quality_module
@@ -135,7 +143,7 @@ def test_run_quality_uses_common_gate_order(tmp_path: Path, monkeypatch, capsys)
     output = capsys.readouterr().out
     assert "[1/9] Python compilation" in output
     assert "[2/9] Project validation" in output
-    assert "[3/9] Test suite (warning strict)" in output
+    assert "[3/9] Test suite + coverage regression (warning strict)" in output
     assert "[4/9] Ruff: repository checks" in output
     assert "[5/9] Ruff: unused imports (F401)" in output
     assert "[6/9] Ruff: imports, modernization, and Bugbear (I,UP,B)" in output
@@ -145,7 +153,7 @@ def test_run_quality_uses_common_gate_order(tmp_path: Path, monkeypatch, capsys)
     assert "Quality checks passed (9/9)." in output
 
     joined = [" ".join(command) for command in commands]
-    assert any("-m envs_xmpp_ops.testing" in command for command in joined)
+    assert any("-m envs_xmpp_ops.testing --coverage" in command for command in joined)
     assert sum("--fix" in command for command in joined) == 3
     assert any("-m pip_audit -r" in command for command in joined)
 
@@ -172,3 +180,25 @@ def test_pytest_command_preserves_arbitrary_pytest_arguments() -> None:
 
     assert command[-3:] == ["tests/test_one.py", "-k", "example"]
 
+
+
+def test_testing_main_defaults_to_tests_directory(monkeypatch) -> None:
+    from envs_xmpp_ops import testing as testing_module
+
+    config = PytestConfig(
+        marker=None,
+        coverage_source=".",
+        coverage_report="term",
+        coverage_fail_under=85,
+    )
+    monkeypatch.setattr(testing_module, "load_test_config", lambda root: config)
+    commands: list[list[str]] = []
+
+    def fake_run(command, *, check):
+        assert check is False
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(testing_module.subprocess, "run", fake_run)
+    assert testing_module.main([]) == 0
+    assert commands[0][-1] == "tests"

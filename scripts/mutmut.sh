@@ -15,10 +15,12 @@ fi
 
 case "$command" in
     fresh)
+        python scripts/check_dev_tools.py mutation
         rm -rf mutants
         exec mutmut run "$@"
         ;;
     run|results|browse)
+        python scripts/check_dev_tools.py mutation
         exec mutmut "$command" "$@"
         ;;
     check)

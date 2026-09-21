@@ -45,11 +45,14 @@ python -m pip install envs-xmpp
 python -c "import envs_xmpp_core; print(envs_xmpp_core.__version__)"
 ```
 
-For development, install a checkout in editable mode:
+For development, install a checkout with the repository quality and mutation tools:
 
 ```bash
-python -m pip install -e /path/to/envs-xmpp
+cd /path/to/envs-xmpp
+python -m pip install -e ".[dev]"
 ```
+
+A plain `pip install -e .` installs only the runtime package. The `dev` extra is required for `./scripts/quality.sh` and mutation testing.
 
 Existing imports remain valid:
 

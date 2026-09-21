@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+python scripts/check_dev_tools.py quality
+
 printf '%s\n' '[1/7] Python compilation'
 python -m compileall -q src tests scripts
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -56,9 +56,18 @@ class _Database:
         return self.connection.execute(sql, tuple(params)).fetchall()
 
 
+@pytest.fixture
+def database() -> Iterator[_Database]:
+    db = _Database()
+    try:
+        yield db
+    finally:
+        db.connection.close()
+
+
 @pytest.mark.asyncio
-async def test_outbox_store_round_trip() -> None:
-    store = OutboxStore(_Database())
+async def test_outbox_store_round_trip(database: _Database) -> None:
+    store = OutboxStore(database)
     await store.init()
     message_id = await store.enqueue(
         destination="admin@example.test",
@@ -75,8 +84,8 @@ async def test_outbox_store_round_trip() -> None:
 
 
 @pytest.mark.asyncio
-async def test_outbox_dedupe_updates_existing_message() -> None:
-    store = OutboxStore(_Database())
+async def test_outbox_dedupe_updates_existing_message(database: _Database) -> None:
+    store = OutboxStore(database)
     await store.init()
     first = await store.enqueue(destination="a", body="one", dedupe_key="same")
     second = await store.enqueue(destination="a", body="two", dedupe_key="same")

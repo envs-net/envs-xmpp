@@ -55,7 +55,15 @@ from .occupants import (
     occupant_snapshot,
     occupant_to_mapping,
 )
-from .stanza import iq_error_condition, iq_error_summary, iq_error_text
+from .stanza import (
+    iq_error_condition,
+    iq_error_summary,
+    iq_error_text,
+    muc_join_error_kind,
+    muc_join_error_summary,
+    xmpp_error_condition,
+    xmpp_error_text,
+)
 
 __all__ = [
     "MUC_FEATURE",
@@ -89,6 +97,8 @@ __all__ = [
     "legacy_muc_domain_hint",
     "load_avatar_payload",
     "looks_like_bare_room_jid",
+    "muc_join_error_kind",
+    "muc_join_error_summary",
     "normalize_affiliation",
     "normalize_avatar_media_type",
     "normalize_jid_text",
@@ -106,5 +116,7 @@ __all__ = [
     "target_is_muc_room",
     "target_text",
     "wait_for_muc_self_presence",
+    "xmpp_error_condition",
+    "xmpp_error_text",
     "xmpp_strict_active",
 ]

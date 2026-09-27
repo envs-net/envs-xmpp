@@ -233,3 +233,63 @@ def test_iq_timeout_summary_is_stanza_safe():
             return "<iq secret='raw-stanza'/>"
 
     assert iq_error_summary(IqTimeout()) == "IQ timeout"
+
+
+def test_muc_join_error_helpers_classify_timeout():
+    from envs_xmpp_core.xmpp import muc_join_error_kind, muc_join_error_summary
+
+    exc = TimeoutError("raw timeout detail")
+    assert muc_join_error_kind(exc) == "timeout"
+    assert muc_join_error_summary(exc) == "timeout"
+
+
+def test_muc_join_error_helpers_render_presence_error_without_raw_stanza():
+    from envs_xmpp_core.xmpp import (
+        muc_join_error_kind,
+        muc_join_error_summary,
+        xmpp_error_condition,
+        xmpp_error_text,
+    )
+
+    class XMPPError(Exception):
+        pass
+
+    class PresenceError(XMPPError):
+        condition = "registration-required"
+        text = "members only"
+
+        def __str__(self):
+            return "<presence secret='raw-stanza'/>"
+
+    exc = PresenceError()
+    assert xmpp_error_condition(exc) == "registration-required"
+    assert xmpp_error_text(exc) == "members only"
+    assert muc_join_error_kind(exc) == "rejected"
+    assert muc_join_error_summary(exc) == "registration-required: members only"
+    assert "raw-stanza" not in muc_join_error_summary(exc)
+
+
+def test_muc_join_error_helpers_read_presence_mapping_fallback():
+    from envs_xmpp_core.xmpp import muc_join_error_summary
+
+    class XMPPError(Exception):
+        pass
+
+    class PresenceError(XMPPError):
+        def __init__(self) -> None:
+            self.presence = {
+                "error": {
+                    "condition": "forbidden",
+                    "text": "not allowed",
+                }
+            }
+
+    assert muc_join_error_summary(PresenceError()) == "forbidden: not allowed"
+
+
+def test_muc_join_error_helpers_keep_programming_errors_unexpected():
+    from envs_xmpp_core.xmpp import muc_join_error_kind, muc_join_error_summary
+
+    exc = KeyError("broken-state")
+    assert muc_join_error_kind(exc) == "unexpected"
+    assert muc_join_error_summary(exc) == "KeyError"

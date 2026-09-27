@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import pytest
 
@@ -285,9 +285,18 @@ class FakeSqlBackend:
         return self.connection.execute(query, tuple(params)).fetchall()
 
 
-@pytest.mark.asyncio
-async def test_shared_sql_repository_owns_schema_and_crud() -> None:
+@pytest.fixture
+def sql_backend() -> Iterator[FakeSqlBackend]:
     backend = FakeSqlBackend()
+    try:
+        yield backend
+    finally:
+        backend.connection.close()
+
+
+@pytest.mark.asyncio
+async def test_shared_sql_repository_owns_schema_and_crud(sql_backend: FakeSqlBackend) -> None:
+    backend = sql_backend
     repository = PendingRoomInviteSqlRepository(backend)
 
     await repository.setup()
@@ -324,8 +333,8 @@ async def test_shared_sql_repository_owns_schema_and_crud() -> None:
 
 
 @pytest.mark.asyncio
-async def test_shared_sql_repository_respects_unavailable_backend() -> None:
-    backend = FakeSqlBackend()
+async def test_shared_sql_repository_respects_unavailable_backend(sql_backend: FakeSqlBackend) -> None:
+    backend = sql_backend
     backend.enabled = False
     repository = PendingRoomInviteSqlRepository(backend)
 

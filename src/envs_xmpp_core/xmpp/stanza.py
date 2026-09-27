@@ -89,3 +89,84 @@ def iq_error_summary(exc: BaseException | object) -> str:
         return f"{detail}: {text}" if text else detail
 
     return name or "IQ error"
+
+
+def xmpp_error_condition(exc: BaseException | object) -> str:
+    """Return an XMPP error condition without rendering a raw stanza.
+
+    Slixmpp's ``XMPPError`` subclasses expose ``condition`` directly, while
+    some compatibility/test implementations only retain the originating IQ or
+    presence stanza.  Keep the helper dependency-free and defensive so callers
+    can use it without importing Slixmpp itself.
+    """
+    condition = getattr(exc, "condition", None)
+    if condition not in (None, ""):
+        return str(condition).strip()
+
+    for attr in ("presence", "iq"):
+        stanza = getattr(exc, attr, None)
+        try:
+            error = stanza["error"] if stanza is not None else None
+            if error is None:
+                continue
+            value = error.get("condition") if hasattr(error, "get") else error["condition"]
+            if value not in (None, ""):
+                return str(value).strip()
+        except Exception:  # noqa: BLE001,S112 - third-party stanza mappings vary
+            continue
+    return ""
+
+
+def xmpp_error_text(exc: BaseException | object) -> str:
+    """Return human-readable XMPP error text without stringifying a stanza."""
+    value = getattr(exc, "text", None)
+    if value not in (None, ""):
+        return str(value).strip()
+
+    for attr in ("presence", "iq"):
+        stanza = getattr(exc, attr, None)
+        try:
+            error = stanza["error"] if stanza is not None else None
+            if error is None:
+                continue
+            value = error.get("text") if hasattr(error, "get") else error["text"]
+            if value not in (None, ""):
+                return str(value).strip()
+        except Exception:  # noqa: BLE001,S112 - third-party stanza mappings vary
+            continue
+    return ""
+
+
+def muc_join_error_kind(exc: BaseException | object) -> str:
+    """Classify a failed MUC join as ``timeout``, ``rejected`` or ``unexpected``.
+
+    The classification intentionally uses exception names/MROs instead of a
+    Slixmpp import so ``envs-xmpp`` keeps its bot-neutral, dependency-light
+    runtime contract.
+    """
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+
+    names = {cls.__name__ for cls in type(exc).__mro__}
+    if "IqTimeout" in names:
+        return "timeout"
+    if names.intersection({"PresenceError", "IqError", "XMPPError"}):
+        return "rejected"
+    return "unexpected"
+
+
+def muc_join_error_summary(exc: BaseException | object) -> str:
+    """Return a compact, stanza-safe detail string for a MUC join failure."""
+    kind = muc_join_error_kind(exc)
+    if kind == "timeout":
+        return "timeout"
+
+    condition = xmpp_error_condition(exc)
+    text = xmpp_error_text(exc)
+    if condition:
+        return f"{condition}: {text}" if text else condition
+    if text:
+        return text
+
+    name = type(exc).__name__
+    return name or "unknown error"

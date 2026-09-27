@@ -55,6 +55,8 @@ from envs_xmpp_core.xmpp import (
     iq_error_text,
     join_muc_confirmed,
     load_avatar_payload,
+    muc_join_error_kind,
+    muc_join_error_summary,
     normalize_affiliation,
     normalize_avatar_media_type,
     normalize_jid_text,
@@ -69,6 +71,8 @@ from envs_xmpp_core.xmpp import (
     start_muc_join_task,
     target_is_muc_room,
     wait_for_muc_self_presence,
+    xmpp_error_condition,
+    xmpp_error_text,
     xmpp_strict_active,
 )
 from envs_xmpp_ops import (
@@ -89,8 +93,8 @@ from envs_xmpp_ops import (
 )
 
 
-def test_distribution_version_is_1_4_0() -> None:
-    assert __version__ == "1.5.0"
+def test_distribution_version_is_1_5_1() -> None:
+    assert __version__ == "1.5.1"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:
@@ -150,6 +154,8 @@ def test_stable_convenience_imports_are_exposed() -> None:
         normalize_avatar_media_type,
         normalize_message_type,
         normalize_role,
+        muc_join_error_kind,
+        muc_join_error_summary,
         occupant_is_admin_or_owner,
         occupant_is_moderator,
         occupant_snapshot,
@@ -159,6 +165,8 @@ def test_stable_convenience_imports_are_exposed() -> None:
         start_muc_join_task,
         target_is_muc_room,
         wait_for_muc_self_presence,
+        xmpp_error_condition,
+        xmpp_error_text,
         xmpp_strict_active,
         DependencyDriftReport,
         DependencyVersion,

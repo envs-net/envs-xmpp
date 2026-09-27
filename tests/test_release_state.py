@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -25,9 +26,20 @@ class SQLiteBackend:
         return self.connection.execute(query, tuple(params)).fetchone()
 
 
-@pytest.mark.asyncio
-async def test_release_state_repository_round_trip_and_conditional_clear(tmp_path):
+@pytest.fixture
+def sqlite_backend(tmp_path: Path) -> Iterator[SQLiteBackend]:
     backend = SQLiteBackend(tmp_path / "state.sqlite")
+    try:
+        yield backend
+    finally:
+        backend.connection.close()
+
+
+@pytest.mark.asyncio
+async def test_release_state_repository_round_trip_and_conditional_clear(
+    sqlite_backend: SQLiteBackend,
+) -> None:
+    backend = sqlite_backend
     repo = ReleaseStateSqlRepository(backend)
     await repo.setup()
     await repo.save(

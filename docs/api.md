@@ -80,6 +80,24 @@ from envs_xmpp_core.xmpp import (
 
 `iq_error_summary()` reports values such as `IQ error forbidden: subscription denied` or `IQ timeout` without embedding the original stanza.
 
+MUC join failures have the same stanza-safe treatment:
+
+```python
+from envs_xmpp_core.xmpp import (
+    muc_join_error_kind,
+    muc_join_error_summary,
+    xmpp_error_condition,
+    xmpp_error_text,
+)
+```
+
+`muc_join_error_kind()` distinguishes ordinary `timeout` and XMPP `rejected`
+outcomes from `unexpected` application failures. `muc_join_error_summary()`
+returns compact details such as `registration-required: members only` without
+stringifying the original presence/IQ stanza. This lets consumers keep routine
+network/protocol failures to one operator log line while preserving full
+tracebacks for programming errors.
+
 
 ## Operator presentation
 

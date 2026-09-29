@@ -276,3 +276,30 @@ and an installed `--version` smoke test.
 ## Dependency drift
 
 `envs_xmpp_ops.inspect_dependency_drift()` compares runtime dependencies in a virtualenv with exact reviewed constraint pins.
+
+## Optional OMEMO mechanism
+
+Version 1.6 exposes policy-neutral OMEMO primitives from
+`envs_xmpp_core.xmpp.omemo` and convenience imports from
+`envs_xmpp_core.xmpp`.
+
+```python
+from envs_xmpp_core.xmpp.omemo import (
+    TaskLocalEncryptionMode,
+    decrypt_incoming_message,
+    encrypt_and_send,
+    ensure_identity_metadata,
+    prepare_storage_file,
+)
+```
+
+The shared layer owns private JSON storage, identity metadata/rotation, optional
+`slixmpp-omemo` plugin registration, fail-closed stanza decryption, encryption
+retry after unusable recipients, conservative local device hints and task-local
+reply encryption state. Install `envs-xmpp[omemo]` to make the XEP-0384 adapter
+available.
+
+Consumer applications keep policy local: whether proactive messages should be
+encrypted, which room occupants are eligible recipients, command permissions,
+reset/restart UX, audit events, message-cache behavior and plaintext fallback
+policy are not defined by envs-xmpp.

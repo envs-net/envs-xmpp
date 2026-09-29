@@ -2,7 +2,7 @@
 
 ## Supported Python versions
 
-envs-xmpp supports Python 3.12 and 3.13. The package deliberately has no mandatory third-party runtime dependencies.
+envs-xmpp supports Python 3.12, 3.13 and 3.14. The package deliberately has no mandatory third-party runtime dependencies.
 
 ## Local setup
 
@@ -34,7 +34,13 @@ python -m build
 python -m twine check dist/*
 ```
 
-GitHub Actions runs the tests on Python 3.12 and 3.13. Release tags are accepted only when `vX.Y.Z` exactly matches `project.version`. Publishing uses PyPI Trusted Publishing/OIDC.
+The base development install deliberately does not pull the optional OMEMO
+runtime stack. Mypy therefore treats imports from `slixmpp-omemo`, `omemo`
+and their Slixmpp integration modules as optional/untyped imports. Install
+`envs-xmpp[omemo]` separately when validating the real XEP-0384 adapter against
+those third-party packages.
+
+GitHub Actions runs the tests on Python 3.12, 3.13 and 3.14. Release tags are accepted only when `vX.Y.Z` exactly matches `project.version`. Publishing uses PyPI Trusted Publishing/OIDC.
 
 ## Compatibility rules
 

@@ -32,6 +32,7 @@ from envs_xmpp_core.storage import (
     retry_delay_seconds,
 )
 from envs_xmpp_core.xmpp import (
+    OMEMO_AVAILABLE,
     AffiliationQueryOptions,
     AffiliationQueryResult,
     AvatarPayload,
@@ -41,6 +42,7 @@ from envs_xmpp_core.xmpp import (
     MucOccupant,
     MucOccupantSnapshot,
     ReplyRoute,
+    TaskLocalEncryptionMode,
     TaskLocalReplyRoute,
     avatar_sha1,
     await_muc_join_compat,
@@ -94,7 +96,7 @@ from envs_xmpp_ops import (
 
 
 def test_distribution_version_is_1_5_1() -> None:
-    assert __version__ == "1.5.1"
+    assert __version__ == "1.6.0"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:
@@ -136,6 +138,10 @@ def test_stable_convenience_imports_are_exposed() -> None:
         MucOccupantSnapshot,
         ReplyRoute,
         TaskLocalReplyRoute,
+        TaskLocalEncryptionMode,
+        OMEMO_AVAILABLE,
+    TaskLocalEncryptionMode,
+    OMEMO_AVAILABLE,
         avatar_sha1,
         bare_jid,
         await_muc_join_compat,

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "envs-xmpp"
-version = "1.5.1"
+version = "1.6.0"
 readme = "README.md"
 description = "Shared runtime and deployment primitives for envs.net XMPP bots"
 requires-python = ">=3.12"
@@ -13,9 +13,13 @@ authors = [{name = "~creme", email = "creme@envs.net"}]
 classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
 
 [project.optional-dependencies]
+omemo = [
+  "slixmpp-omemo>=2,<3",
+]
 dev = [
   "build>=1.2",
   "mypy>=1.10",
@@ -48,6 +52,17 @@ python_version = "3.12"
 check_untyped_defs = true
 warn_unused_ignores = true
 no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = [
+  "omemo",
+  "omemo.*",
+  "slixmpp",
+  "slixmpp.*",
+  "slixmpp_omemo",
+  "slixmpp_omemo.*",
+]
+ignore_missing_imports = true
 
 [tool.mutmut]
 source_paths = [

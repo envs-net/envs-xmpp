@@ -22,11 +22,11 @@ logic, plugin systems or bot-specific lifecycle policy.
 
 ## Compatibility
 
-- Python 3.12 and 3.13
+- Python 3.12, 3.13 and 3.14
 - GPL-3.0-only
 - no mandatory third-party runtime dependencies
 
-The bots themselves remain responsible for dependencies such as Slixmpp.
+The base package keeps no mandatory third-party runtime dependencies. Optional OMEMO support is available through `envs-xmpp[omemo]`, while each bot still owns its encryption policy, commands, recipient-state adapters and operator wording.
 
 Shared storage primitives include SQLite integrity checking and safe ZIP member
 validation/streaming. Pending room invites use a shared typed model, deduplication, store
@@ -43,6 +43,12 @@ Install the stable package from PyPI:
 ```bash
 python -m pip install envs-xmpp
 python -c "import envs_xmpp_core; print(envs_xmpp_core.__version__)"
+```
+
+Install the optional OMEMO mechanism when a consumer needs encrypted transport:
+
+```bash
+python -m pip install 'envs-xmpp[omemo]'
 ```
 
 For development, install a checkout with the repository quality and mutation tools:
@@ -89,7 +95,8 @@ src/
 │       ├── jid.py
 │       ├── messaging.py
 │       ├── muc_join.py
-│       └── occupants.py
+│       ├── occupants.py
+│       └── omemo/
 └── envs_xmpp_ops/
     ├── accounts.py
     ├── deploy.py
@@ -116,7 +123,7 @@ supported, so existing consumers do not have to migrate immediately.
 The stable shared layer now covers avatar/profile publication, confirmed MUC
 joins, normalized occupant identity, message-target/reply routing, durable
 outbox storage, operational alert state, redacted diagnostics and deployment
-layout discovery. Version 1.1 adds the shared operator-presentation models and renderers for task, status and room inventories. Version 1.2 adds shared JID text normalization, including deliberately narrow cleanup of U+200B/U+FEFF copy/paste artifacts before best-effort bare-JID comparison. Version 1.3 adds shared reconnect retry/backoff orchestration that waits for full application readiness, avoids duplicate transport attempts during session-start races, and resets partial sessions after bounded startup timeouts. Version 1.4 adds declarative release-tag and wheel verification for consumer repositories, including packaged-asset integrity, console entry-point validation, isolated installation, `pip check`, runtime asset resolution and CLI version smoke tests. Version 1.5 adds shared coverage- and mutation-regression gates, including reviewed survivor baselines and strict rejection of new survivors or incomplete mutation outcomes. The bots still own disconnect cleanup, room/state reconciliation, readiness criteria, alerts and other application policy. The 1.x line also shares XMPP session-generation telemetry and bounded MUC affiliation IQ mechanics while keeping strict JID validation and bot policy in the applications. Bot-specific command behavior, moderation, OMEMO, plugin systems and notification wording intentionally remain outside the core.
+layout discovery. Version 1.1 adds the shared operator-presentation models and renderers for task, status and room inventories. Version 1.2 adds shared JID text normalization, including deliberately narrow cleanup of U+200B/U+FEFF copy/paste artifacts before best-effort bare-JID comparison. Version 1.3 adds shared reconnect retry/backoff orchestration that waits for full application readiness, avoids duplicate transport attempts during session-start races, and resets partial sessions after bounded startup timeouts. Version 1.4 adds declarative release-tag and wheel verification for consumer repositories, including packaged-asset integrity, console entry-point validation, isolated installation, `pip check`, runtime asset resolution and CLI version smoke tests. Version 1.5 adds shared coverage- and mutation-regression gates, including reviewed survivor baselines and strict rejection of new survivors or incomplete mutation outcomes. Version 1.6 adds shared optional OMEMO mechanism primitives: private storage and identity rotation, XEP-0384 plugin/storage integration, fail-closed decrypt/encrypt helpers, unusable-recipient filtering, conservative device hints and task-local reply encryption state. The bots still own encryption policy and commands. The bots still own disconnect cleanup, room/state reconciliation, readiness criteria, alerts and other application policy. The 1.x line also shares XMPP session-generation telemetry and bounded MUC affiliation IQ mechanics while keeping strict JID validation and bot policy in the applications. Bot-specific command behavior, moderation, OMEMO policy/commands, plugin systems and notification wording intentionally remain outside the core; only the reusable OMEMO mechanism is shared.
 
 `envs_xmpp_ops` is designed for thin bot-specific deployment frontends. The
 frontends subclass the shared `DeploymentTarget` for common checkout/venv/config/
@@ -146,7 +153,7 @@ it has demonstrably identical semantics in more than one consumer.
 
 ## CI and PyPI releases
 
-GitHub Actions tests Python 3.12 and 3.13. A `vX.Y.Z` tag is accepted only when
+GitHub Actions tests Python 3.12, 3.13 and 3.14. A `vX.Y.Z` tag is accepted only when
 it exactly matches `project.version` in `pyproject.toml`. Release distributions
 are published through PyPI Trusted Publishing/OIDC, without a long-lived PyPI
 token.

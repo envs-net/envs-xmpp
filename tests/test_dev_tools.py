@@ -25,6 +25,26 @@ def test_dev_extra_contains_quality_and_mutation_tools() -> None:
     assert any(requirement.startswith("pytest-cov") for requirement in dev)
     assert "mutmut==3.8.0" in dev
 
+
+def test_mypy_allows_missing_optional_omemo_dependencies() -> None:
+    pyproject = tomllib.loads(ROOT.joinpath("pyproject.toml").read_text())
+    overrides = tuple(pyproject["tool"]["mypy"]["overrides"])
+
+    optional_override = next(
+        override
+        for override in overrides
+        if "slixmpp_omemo" in override.get("module", [])
+    )
+    modules = set(optional_override["module"])
+
+    assert optional_override["ignore_missing_imports"] is True
+    assert {
+        "omemo.*",
+        "slixmpp.*",
+        "slixmpp_omemo",
+        "slixmpp_omemo.*",
+    } <= modules
+
 def test_mutmut_pin_matches_regression_baseline() -> None:
     pyproject = tomllib.loads(ROOT.joinpath("pyproject.toml").read_text())
     dev = tuple(pyproject["project"]["optional-dependencies"]["dev"])

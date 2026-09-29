@@ -25,7 +25,7 @@ This keeps runtime and deployment contracts on one version while preserving a cl
 
 ## Core domains
 
-`envs_xmpp_core.xmpp` owns protocol/mechanism helpers such as deliberately narrow JID text normalization, confirmed MUC joins, occupant normalization, routing and avatar publication. Strict JID validation remains application-owned.
+`envs_xmpp_core.xmpp` owns protocol/mechanism helpers such as deliberately narrow JID text normalization, confirmed MUC joins, occupant normalization, routing, avatar publication, and the optional OMEMO mechanism. The OMEMO layer owns storage/identity safety, XEP-0384 integration, encryption/decryption mechanics, recipient filtering, device hints and task-local encryption state; applications still own recipient-state adapters and encryption policy.
 
 `envs_xmpp_core.runtime` owns task supervision, watchdog/lifecycle/health helpers, alerts, safe diagnostics, and the policy-neutral reconnect retry/backoff transaction.
 
@@ -47,7 +47,7 @@ The following remain local by design:
 
 - command names, permissions and reply wording;
 - moderation and protection policy;
-- OMEMO behavior;
+- OMEMO policy, commands, admin-room behavior and operator wording;
 - plugin systems and feature modules;
 - application database schemas;
 - concrete health severity decisions and recovery policy;

@@ -19,6 +19,7 @@ jobs:
         python-version:
           - "3.12"
           - "3.13"
+          - "3.14"
 
     steps:
       - uses: actions/checkout@v6
@@ -37,17 +38,17 @@ jobs:
         run: python -m pytest
 
       - name: Ruff
-        if: matrix.python-version == '3.13'
+        if: matrix.python-version == '3.14'
         run: python -m ruff check .
 
       - name: mypy
-        if: matrix.python-version == '3.13'
+        if: matrix.python-version == '3.14'
         run: python -m mypy src
 
       - name: Build distributions
-        if: matrix.python-version == '3.13'
+        if: matrix.python-version == '3.14'
         run: python -m build
 
       - name: Check distribution metadata
-        if: matrix.python-version == '3.13'
+        if: matrix.python-version == '3.14'
         run: python -m twine check dist/*

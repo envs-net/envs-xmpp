@@ -1,0 +1,61 @@
+"""Shared OMEMO primitives for envs.net XMPP bots."""
+
+from .context import TaskLocalEncryptionMode
+from .plugin import OMEMO_AVAILABLE, XEP_0384_module, XEP_0384Impl
+from .storage import (
+    PRIVATE_DIRECTORY_MODE,
+    PRIVATE_FILE_MODE,
+    backup_existing_path,
+    backup_path,
+    collect_storage_device_hints,
+    current_identity,
+    ensure_identity_metadata,
+    ensure_private_directory,
+    format_device_ids,
+    identity_metadata_path,
+    prepare_storage_file,
+    read_identity_metadata,
+    rotate_storage_identity,
+    write_identity_metadata,
+)
+from .transport import (
+    OMEMO_NAMESPACES,
+    decrypt_incoming_message,
+    encrypt_and_send,
+    expected_device_info_error,
+    extract_unusable_recipients,
+    message_has_omemo_payload,
+    normalize_bare_jid,
+    recipient_bare_jids,
+    wait_for_omemo_ready,
+)
+
+__all__ = [
+    "OMEMO_AVAILABLE",
+    "OMEMO_NAMESPACES",
+    "PRIVATE_DIRECTORY_MODE",
+    "PRIVATE_FILE_MODE",
+    "TaskLocalEncryptionMode",
+    "XEP_0384Impl",
+    "XEP_0384_module",
+    "backup_existing_path",
+    "backup_path",
+    "collect_storage_device_hints",
+    "current_identity",
+    "decrypt_incoming_message",
+    "encrypt_and_send",
+    "ensure_identity_metadata",
+    "ensure_private_directory",
+    "expected_device_info_error",
+    "extract_unusable_recipients",
+    "format_device_ids",
+    "identity_metadata_path",
+    "message_has_omemo_payload",
+    "normalize_bare_jid",
+    "prepare_storage_file",
+    "read_identity_metadata",
+    "recipient_bare_jids",
+    "rotate_storage_identity",
+    "wait_for_omemo_ready",
+    "write_identity_metadata",
+]

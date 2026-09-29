@@ -95,8 +95,8 @@ from envs_xmpp_ops import (
 )
 
 
-def test_distribution_version_is_1_5_1() -> None:
-    assert __version__ == "1.6.0"
+def test_distribution_version_is_1_6_1() -> None:
+    assert __version__ == "1.6.1"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:
@@ -115,7 +115,6 @@ def test_stable_convenience_imports_are_exposed() -> None:
         SessionLifecycleSnapshot,
         SessionLifecycleState,
         run_reconnect_loop,
-    run_reconnect_loop,
         diagnostic_error,
         diagnostic_payload,
         exception_summary,

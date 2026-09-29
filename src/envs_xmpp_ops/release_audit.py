@@ -68,7 +68,13 @@ def _requirement_has_version(requirement: str | None, expected: str) -> bool:
     if not requirement:
         return False
     normalized = re.sub(r"\s+", "", requirement).lower()
-    return normalized.startswith(f"{_DEPENDENCY_NAME}>={expected},") and "<2.0" in normalized
+    name_pattern = rf"{re.escape(_DEPENDENCY_NAME)}(?:\[[a-z0-9_.-]+(?:,[a-z0-9_.-]+)*\])?"
+    return bool(
+        re.fullmatch(
+            rf"{name_pattern}>={re.escape(expected)},<2\.0",
+            normalized,
+        )
+    )
 
 
 def audit_shared_core_release_state(
@@ -78,6 +84,7 @@ def audit_shared_core_release_state(
     constraint_paths: tuple[str, ...] = (
         "constraints/python312.txt",
         "constraints/python313.txt",
+        "constraints/python314.txt",
     ),
     bootstrap_path: str = "scripts/_envs_xmpp_bootstrap.py",
 ) -> SharedCoreReleaseAudit:
@@ -101,7 +108,7 @@ def audit_shared_core_release_state(
     errors: list[str] = []
     if not _requirement_has_version(pyproject, expected):
         errors.append(
-            f"pyproject.toml envs-xmpp requirement must start at {expected} and stay below 2.0; got {pyproject!r}"
+            f"pyproject.toml envs-xmpp requirement (optional extras allowed) must be >= {expected},<2.0; got {pyproject!r}"
         )
     if requirements != pyproject:
         errors.append(

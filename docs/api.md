@@ -303,3 +303,14 @@ Consumer applications keep policy local: whether proactive messages should be
 encrypted, which room occupants are eligible recipients, command permissions,
 reset/restart UX, audit events, message-cache behavior and plaintext fallback
 policy are not defined by envs-xmpp.
+
+### OMEMO trust and wire-format behavior
+
+The bundled XEP-0384 adapter enables Blind Trust Before Verification (BTBV).
+Consumers that need interactive fingerprint verification must add that policy at
+the application layer; envs-xmpp does not currently expose a manual-trust UI.
+
+Payload detection recognizes both the legacy OMEMO namespace and the OMEMO 2
+namespace. Actual encryption/decryption support is delegated to the installed
+`slixmpp-omemo` backend. An encrypted payload the backend cannot recognize or
+decrypt is rejected fail-closed and is never treated as plaintext.

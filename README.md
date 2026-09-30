@@ -36,6 +36,21 @@ default/type/range/lifecycle metadata; each bot keeps its domain-specific valida
 reload behavior and operator-facing wording local. Pagination provides a neutral page-slice
 model while bot frontends retain their existing command-specific return formats.
 
+## Shared config and restore operator contracts (development)
+
+`envs_xmpp_core.config.operator` supplies deterministic config-diff previews,
+secret-redacted runtime change lines and structured reload diagnostics.  A
+report is **not** validation or authorization: each bot must validate candidate
+values, keep startup-only settings inactive until restart, and use its existing
+locked config-file transaction and rollback.  The reload renderer accepts only
+already-redacted diagnostic lines, never raw secret-bearing configuration.
+
+`envs_xmpp_core.storage.restore.restore_recovery_report()` classifies an
+unsuccessful restore as a completed/incomplete rollback, completed/failed
+runtime recovery or no recovery attempt.  It does not perform recovery and
+must not be treated as crash-atomicity of multi-file restoration.  Application
+wording and post-restore restart policy remain bot-specific.
+
 ## Shared command and help contracts (development)
 
 `envs_xmpp_core.commands` contains **metadata-only** primitives shared by

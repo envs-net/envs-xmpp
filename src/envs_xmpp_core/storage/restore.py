@@ -298,3 +298,36 @@ async def run_restore_transaction(
         for error in (*rollback_errors, *recovery_errors):
             exc.add_note(f"restore recovery failure: {error}")
         raise
+
+
+@dataclass(frozen=True, slots=True)
+class RestoreRecoveryReport:
+    """Read-only recovery outcome for operator diagnostics after a failed restore."""
+
+    phase: RestorePhase
+    outcome: Literal[
+        "rollback_complete", "rollback_incomplete", "runtime_recovered",
+        "runtime_recovery_failed", "not_attempted",
+    ]
+    errors: tuple[BaseException, ...]
+
+
+def restore_recovery_report(error: RestoreTransactionError) -> RestoreRecoveryReport:
+    """Classify rollback and runtime recovery without changing exception handling.
+
+    A rollback can be incomplete even if only its runtime recovery hook failed.
+    The report never implies process crash-atomicity or successful persistence.
+    """
+
+    errors = (*error.rollback_errors, *error.recovery_errors)
+    outcome: Literal[
+        "rollback_complete", "rollback_incomplete", "runtime_recovered",
+        "runtime_recovery_failed", "not_attempted",
+    ]
+    if error.rollback_attempted:
+        outcome = "rollback_incomplete" if errors else "rollback_complete"
+    elif error.recovery_attempted:
+        outcome = "runtime_recovery_failed" if errors else "runtime_recovered"
+    else:
+        outcome = "not_attempted"
+    return RestoreRecoveryReport(error.phase, outcome, errors)

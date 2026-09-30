@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .formatting import format_absolute_time, format_duration, format_relative_time
 from .pagination import PageRequest
+from .runtime.rooms import RoomLifecycleSnapshot, room_key
 from .runtime.session import SessionLifecycleSnapshot
 
 _STATUS_ICONS = {
@@ -23,6 +24,11 @@ _STATUS_ICONS = {
     "running": "✅",
     "enabled": "✅",
     "joined": "🟢",
+    "configured": "⚪",
+    "joining": "🔄",
+    "degraded": "🟠",
+    "deferred": "🟠",
+    "leaving": "⏹️",
     "done": "☑️",
     "completed": "☑️",
     "info": "ℹ️",
@@ -57,7 +63,10 @@ _TASK_MODE_ALIASES = {
     "problem": "problems",
 }
 
-ROOM_LIST_LEGEND = "Legend: 🟢 joined · 🟠 attention · 🔴 unavailable · ⚪ not joined"
+ROOM_LIST_LEGEND = (
+    "Legend: 🟢 joined · 🔄 joining · 🟠 degraded/deferred/attention · "
+    "❌ failed · ⏹️ leaving · ⚪ configured · 🔴 unavailable"
+)
 
 
 @dataclass(frozen=True)
@@ -144,9 +153,19 @@ class RoomView:
     unavailable: bool = False
     expected_joined: bool = True
     configured: bool = True
+    lifecycle_state: str | None = None
 
     @property
     def state(self) -> str:
+        if self.lifecycle_state is not None:
+            # Never claim a join from a lifecycle observation alone.
+            if self.joined and self.attention:
+                return "attention"
+            if self.joined:
+                return "joined"
+            if self.lifecycle_state == "joined":
+                return "attention"
+            return self.lifecycle_state
         if self.unavailable:
             return "unavailable"
         if self.attention:
@@ -155,6 +174,11 @@ class RoomView:
 
     @property
     def needs_attention(self) -> bool:
+        if self.lifecycle_state == "leaving" and not self.joined:
+            # An intentional leave is not a reconnect failure.
+            return self.attention
+        if not self.joined and self.lifecycle_state in {"degraded", "failed", "deferred"}:
+            return True
         return self.attention or self.unavailable or (self.expected_joined and not self.joined)
 
 
@@ -639,6 +663,40 @@ def render_watchdog_lines(state: Mapping[str, Any] | None) -> list[str]:
     if last_error:
         lines.append(f"❌ last error: {last_error}")
     return lines
+
+
+def room_view_with_lifecycle(
+    view: RoomView,
+    observation: RoomLifecycleSnapshot | None,
+) -> RoomView:
+    """Annotate a room view without treating lifecycle state as verified presence.
+
+    A joined lifecycle snapshot may be stale (e.g. after a partial reconnect).
+    The bot's independently confirmed occupant/runtime state remains authoritative.
+    """
+    if observation is None or room_key(view.jid) != room_key(observation.room):
+        return view
+    details = (*view.details, f"lifecycle={observation.state}")
+    mismatch = observation.state == "joined" and not view.joined
+    if mismatch:
+        details += ("self-presence unconfirmed",)
+    return replace(
+        view,
+        details=details,
+        lifecycle_state=observation.state,
+        attention=view.attention or mismatch,
+    )
+
+
+def room_lifecycle_summary(observations: Iterable[RoomLifecycleSnapshot]) -> str:
+    """Use the same bounded count vocabulary in both status commands."""
+    states = Counter(observation.state for observation in observations)
+    return (
+        f"Room lifecycle: {sum(states.values())} tracked · "
+        f"{states['joined']} joined · {states['joining']} joining · "
+        f"{states['degraded']} degraded · {states['failed']} failed · "
+        f"{states['deferred']} deferred · {states['leaving']} leaving"
+    )
 
 
 def render_room_entry(room: RoomView) -> str:

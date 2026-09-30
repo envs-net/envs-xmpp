@@ -171,7 +171,10 @@ def test_room_inventory_title_and_preamble_are_shared_operator_contract() -> Non
     assert room_list_title(request) == "📋 Rooms — problems"
     assert room_list_preamble(rooms, request) == [
         "Summary: 2 configured · 1 joined · 1 issue",
-        "Legend: 🟢 joined · 🟠 attention · 🔴 unavailable · ⚪ not joined",
+        (
+            "Legend: 🟢 joined · 🔄 joining · 🟠 degraded/deferred/attention · "
+            "❌ failed · ⏹️ leaving · ⚪ configured · 🔴 unavailable"
+        ),
         "View: problems · 1 match(es)",
     ]
 

@@ -54,6 +54,24 @@ authorization, room policy and user-facing help presentation remain the
 responsibility of each bot. These development interfaces do not change the
 published package version until the planned joint release.
 
+## Shared room lifecycle (development)
+
+`envs_xmpp_core.runtime.RoomLifecycleRegistry` records seven common MUC
+observations: `configured`, `joining`, `joined`, `degraded`, `failed`,
+`deferred` and `leaving`. It yields immutable
+`RoomLifecycleSnapshot` records, stores optional retry timestamps without
+choosing retry delays, and increments a session generation when a transport
+session is replaced. A new session **always invalidates an earlier joined
+assertion**, while explicit leave intent survives reconnect.
+
+A room becomes `joined` **only** when its application adapter passes verified
+bot self-presence to `confirm_self_presence()`. This tracker is not an
+occupant authenticator or a second source of truth for privileges; both bots
+retain their existing verified occupant caches, join timers, reconnect
+policies, moderator rights and application-specific room configuration.
+These development interfaces will be released after the joint unification
+work, not through an interim version bump.
+
 ## Installation
 
 Install the stable package from PyPI:
@@ -99,6 +117,7 @@ src/
 │   │   ├── diagnostics.py
 │   │   ├── health.py
 │   │   ├── reconnect.py
+│   │   ├── rooms.py
 │   │   └── session.py
 │   ├── security/
 │   │   └── redaction.py

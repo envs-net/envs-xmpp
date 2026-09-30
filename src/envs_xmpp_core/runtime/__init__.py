@@ -15,6 +15,7 @@ from .health import (
     watchdog_health_state,
 )
 from .reconnect import run_reconnect_loop
+from .rooms import RoomLifecycleRegistry, RoomLifecycleSnapshot, RoomLifecycleStatus, room_key
 from .session import SessionLifecycleSnapshot, SessionLifecycleState
 from .suppression import CooldownDecision, KeyedCooldown
 from .tasks import TaskInfo
@@ -27,6 +28,9 @@ __all__ = [
     "HealthSnapshot",
     "KeyedCooldown",
     "RoomJoinHealthState",
+    "RoomLifecycleRegistry",
+    "RoomLifecycleSnapshot",
+    "RoomLifecycleStatus",
     "SessionLifecycleSnapshot",
     "SessionLifecycleState",
     "TaskHealthState",
@@ -39,6 +43,7 @@ __all__ = [
     "exception_summary",
     "health_check_from_messages",
     "health_snapshot_messages",
+    "room_key",
     "run_reconnect_loop",
     "supervisor_task_health_state",
     "watchdog_health_state",

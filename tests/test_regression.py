@@ -144,6 +144,55 @@ def test_mutation_gate_reports_clean_pass_exactly(tmp_path, monkeypatch):
     )
 
 
+
+@pytest.mark.parametrize(
+    ("accepted_survivors", "expected_survivors"),
+    [
+        (None, 'null'),
+        (frozenset({"zeta", "alpha"}), '[\n      "alpha",\n      "zeta"\n    ]'),
+    ],
+)
+def test_baseline_writer_preserves_snapshot_format_and_explicit_utf8(
+    tmp_path, monkeypatch, accepted_survivors, expected_survivors
+):
+    """Baseline is a checked-in artifact: retain its stable layout and UTF-8 contract."""
+    from envs_xmpp_ops.regression import RegressionBaseline, _write_baseline
+
+    target = tmp_path / "nested" / "regression-baseline.json"
+    actual_writes = []
+    original_write_text = Path.write_text
+
+    def capture_write_text(path, text, *args, **kwargs):
+        if path == target:
+            actual_writes.append((text, args, kwargs))
+        return original_write_text(path, text, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", capture_write_text)
+    baseline = RegressionBaseline(
+        coverage_percent=91.25,
+        coverage_allowed_drop=0.5,
+        mutmut_version="3.8.0",
+        accepted_survivors=accepted_survivors,
+    )
+    _write_baseline(target, baseline)
+
+    expected = (
+        '{\n'
+        '  "schema": 2,\n'
+        '  "coverage": {\n'
+        '    "percent": 91.25,\n'
+        '    "allowed_drop": 0.5\n'
+        '  },\n'
+        '  "mutation": {\n'
+        '    "mutmut_version": "3.8.0",\n'
+        f'    "accepted_survivors": {expected_survivors}\n'
+        '  }\n'
+        '}\n'
+    )
+    assert actual_writes == [(expected, (), {"encoding": "utf-8"})]
+    assert target.read_text(encoding="utf-8") == expected
+
+
 def test_coverage_delta_allows_configured_drop(tmp_path):
     root = _project(tmp_path, survivors=[], percent=90.0, allowed_drop=0.5)
     _coverage(root, 89.5)

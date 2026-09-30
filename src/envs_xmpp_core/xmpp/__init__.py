@@ -18,6 +18,7 @@ from .avatar import (
 from .jid import bare_jid, normalize_jid_text
 from .messaging import (
     MUC_FEATURE,
+    MessageContext,
     MessageTarget,
     MessageTargetKind,
     ReplyRoute,
@@ -28,6 +29,7 @@ from .messaging import (
     is_muc_private_message,
     legacy_muc_domain_hint,
     looks_like_bare_room_jid,
+    message_context_from_stanza,
     normalize_message_type,
     target_is_muc_room,
     target_text,
@@ -92,6 +94,7 @@ __all__ = [
     "AffiliationQueryOptions",
     "AffiliationQueryResult",
     "AvatarPayload",
+    "MessageContext",
     "MessageTarget",
     "MessageTargetKind",
     "MucJoinResult",
@@ -129,6 +132,7 @@ __all__ = [
     "legacy_muc_domain_hint",
     "load_avatar_payload",
     "looks_like_bare_room_jid",
+    "message_context_from_stanza",
     "message_has_omemo_payload",
     "muc_join_error_kind",
     "muc_join_error_summary",

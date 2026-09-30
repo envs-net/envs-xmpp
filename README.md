@@ -201,3 +201,15 @@ version before a release is cut.
 ## Runtime and utility primitives
 
 The shared core also provides heartbeat-aware worker waits, lifecycle phase orchestration, passive `HealthCheck`/`HealthSnapshot` diagnostics with failure-isolated collection, normalized task/watchdog/lifecycle/room-inventory facts, ordered health-message flattening, asynchronous release comparison results, and neutral human-readable duration/byte formatting. Applications keep notification policy, active recovery behavior, severity decisions, concrete domain checks and labels locally.
+
+
+## Shared incoming message context (development)
+
+`envs_xmpp_core.xmpp.message_context_from_stanza()` creates an immutable
+`MessageContext` snapshot of incoming XMPP routing metadata (DM, MUC or MUC-PM).
+Call it **after decryption** to read the command body and encryption flag. The
+`reply_route` describes the wire destination/type; it is **not** an OMEMO
+recipient or an authorization decision. An occupant's real JID is recorded
+only when the application provides one explicitly. XEP-0359 `origin-id` and
+the ordinary stanza `id` are kept separate. This helper does not persist
+decrypted messages or change either bot's encryption, caching or admin policy.

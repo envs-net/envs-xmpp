@@ -41,6 +41,125 @@ class ReplyRoute:
     message_type: str
 
 
+@dataclass(frozen=True, slots=True)
+class MessageContext:
+    """Immutable, bot-neutral snapshot of an incoming message after decryption.
+
+    ``sender`` remains the full wire JID. ``real_jid`` is only populated from
+    application-supplied occupant knowledge, never inferred from a MUC nick.
+    A missing real JID must *not* be treated as an authorized user identity.
+    No decrypted body is stored in a global/task-local context.
+    """
+
+    sender: str
+    sender_bare: str
+    sender_resource: str
+    message_type: str
+    kind: MessageTargetKind
+    body: str
+    nick: str
+    room: str | None
+    encrypted: bool
+    message_id: str | None
+    origin_id: str | None
+    real_jid: str | None
+
+    @property
+    def is_room(self) -> bool:
+        return self.kind is MessageTargetKind.GROUPCHAT
+
+    @property
+    def is_muc_pm(self) -> bool:
+        return self.kind is MessageTargetKind.MUC_PM
+
+    @property
+    def reply_route(self) -> ReplyRoute:
+        """Return a wire-compatible route, *not* an OMEMO recipient identity."""
+        if self.is_room:
+            return ReplyRoute(self.sender_bare, "groupchat")
+        return ReplyRoute(self.sender, "chat")
+
+
+def _incoming_field(stanza: Any, key: str) -> Any:
+    """Read Slixmpp or mapping-style fields without mutating a stanza."""
+    try:
+        return stanza[key]
+    except (KeyError, TypeError, AttributeError):
+        return None
+
+
+def message_context_from_stanza(
+    stanza: Any,
+    *,
+    encrypted: bool = False,
+    joined_rooms: Collection[str] = (),
+    real_jid: object | None = None,
+) -> MessageContext:
+    """Snapshot routing metadata for DM, MUC and MUC-PM messages.
+
+    Call this *after* OMEMO decryption for command bodies. Applications still
+    own decryption, authentication, cache exclusion, policy and send decisions.
+    ``joined_rooms`` is matched case-insensitively to classify MUC-PMs.
+    """
+    sender_jid = _incoming_field(stanza, "from")
+    sender = str(sender_jid or "").strip()
+    raw_bare = getattr(sender_jid, "bare", None)
+    raw_resource = getattr(sender_jid, "resource", None)
+    sender_bare = str(raw_bare or sender.split("/", 1)[0]).strip()
+    sender_resource = str(
+        raw_resource if raw_resource is not None else sender.partition("/")[2]
+    ).strip()
+    message_type = str(_incoming_field(stanza, "type") or "").strip().lower()
+    body = str(_incoming_field(stanza, "body") or "")
+    mucnick = str(_incoming_field(stanza, "mucnick") or "").strip()
+
+    if message_type == "groupchat":
+        kind = MessageTargetKind.GROUPCHAT
+        room: str | None = sender_bare or None
+    elif (
+        message_type in {"chat", "normal"}
+        and sender_resource
+        and sender_bare.casefold() in {str(room).casefold() for room in joined_rooms}
+    ):
+        kind = MessageTargetKind.MUC_PM
+        room = sender_bare
+    else:
+        kind = MessageTargetKind.CHAT
+        room = None
+
+    stanza_id = _incoming_field(stanza, "id")
+    message_id = str(stanza_id).strip() if stanza_id else None
+    # XEP-0359 origin-id and the stanza id are distinct identifiers.
+    origin_id = None
+    xml = getattr(stanza, "xml", None)
+    if xml is not None and callable(getattr(xml, "find", None)):
+        element = xml.find("{urn:xmpp:sid:0}origin-id")
+        if element is not None:
+            candidate = str(element.get("id") or "").strip()
+            origin_id = candidate or None
+
+    resolved = str(real_jid or "").strip() or None
+    if resolved is not None:
+        # An explicit real-JID hint may include a resource; never allow that to
+        # become the OMEMO recipient's identity.
+        resolved = resolved.split("/", 1)[0]
+
+    return MessageContext(
+        sender=sender,
+        sender_bare=sender_bare,
+        sender_resource=sender_resource,
+        message_type=message_type,
+        kind=kind,
+        body=body,
+        nick=mucnick or sender_resource if room is not None else mucnick,
+        room=room,
+        encrypted=bool(encrypted),
+        message_id=message_id,
+        origin_id=origin_id,
+        real_jid=resolved,
+    )
+
+
 class TaskLocalReplyRoute:
     """Store a reply route without leaking it into child asyncio tasks.
 
@@ -272,6 +391,7 @@ async def target_is_muc_room(
 
 __all__ = [
     "MUC_FEATURE",
+    "MessageContext",
     "MessageTarget",
     "MessageTargetKind",
     "ReplyRoute",
@@ -285,6 +405,7 @@ __all__ = [
     "legacy_muc_domain_hint",
     "looks_like_bare_room_jid",
     "maybe_await",
+    "message_context_from_stanza",
     "normalize_message_type",
     "target_is_muc_room",
     "target_text",

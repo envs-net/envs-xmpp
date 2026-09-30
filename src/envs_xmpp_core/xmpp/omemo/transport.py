@@ -34,6 +34,18 @@ def normalize_bare_jid(value: object) -> str | None:
     return normalized
 
 
+def require_omemo_bare_jid(value: object) -> str:
+    """Normalize an OMEMO recipient, rejecting missing/invalid identities.
+
+    Both bots must fail closed rather than silently treating an invalid sender
+    as a bare JID or an acceptable OMEMO recipient.
+    """
+    normalized = normalize_bare_jid(value)
+    if not normalized:
+        raise ValueError("OMEMO recipient does not contain a valid bare JID")
+    return normalized
+
+
 def message_has_omemo_payload(msg: Any) -> bool:
     """Return True only for a stanza containing an actual encrypted payload."""
     try:

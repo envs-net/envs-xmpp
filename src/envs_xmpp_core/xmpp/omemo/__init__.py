@@ -1,6 +1,6 @@
 """Shared OMEMO primitives for envs.net XMPP bots."""
 
-from .context import TaskLocalEncryptionMode
+from .context import TaskLocalEncryptionMode, configure_omemo_dependency_logging
 from .plugin import OMEMO_AVAILABLE, XEP_0384_module, XEP_0384Impl
 from .storage import (
     PRIVATE_DIRECTORY_MODE,
@@ -27,6 +27,7 @@ from .transport import (
     message_has_omemo_payload,
     normalize_bare_jid,
     recipient_bare_jids,
+    require_omemo_bare_jid,
     wait_for_omemo_ready,
 )
 
@@ -41,6 +42,7 @@ __all__ = [
     "backup_existing_path",
     "backup_path",
     "collect_storage_device_hints",
+    "configure_omemo_dependency_logging",
     "current_identity",
     "decrypt_incoming_message",
     "encrypt_and_send",
@@ -55,6 +57,7 @@ __all__ = [
     "prepare_storage_file",
     "read_identity_metadata",
     "recipient_bare_jids",
+    "require_omemo_bare_jid",
     "rotate_storage_identity",
     "wait_for_omemo_ready",
     "write_identity_metadata",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextvars import ContextVar, Token
 
 _EncryptionValue = tuple[object | None, bool | None]
@@ -35,4 +36,12 @@ class TaskLocalEncryptionMode:
         return encrypted
 
 
-__all__ = ["TaskLocalEncryptionMode"]
+def configure_omemo_dependency_logging() -> None:
+    """Reduce optional dependency chatter except in DEBUG mode."""
+    if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
+        return
+    for logger_name in ("omemo", "omemo.core", "slixmpp_omemo", "slixmpp_omemo.xep_0384"):
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+
+
+__all__ = ["TaskLocalEncryptionMode", "configure_omemo_dependency_logging"]

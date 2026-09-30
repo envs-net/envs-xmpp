@@ -130,3 +130,57 @@ def test_prefix_parsing_preserves_original_arguments() -> None:
     assert parse_prefixed_command("hello", "!") is None
     assert parse_prefixed_command("!help", "") is None
     assert parse_prefixed_command("!", "!") == ("", [])
+
+
+def test_command_help_document_preserves_inline_layout() -> None:
+    from envs_xmpp_core.commands import CommandHelpDocument, render_command_help_document
+
+    spec: CommandSpec[object] = CommandSpec(name="whoami", usage="{prefix}whoami")
+    document = CommandHelpDocument(spec, inline=True)
+    assert render_command_help_document(document, "!") == "Usage: !whoami"
+    assert render_command_help_document(document, "//") == "Usage: //whoami"
+
+
+def test_command_help_document_renders_examples_and_literal_notes() -> None:
+    from envs_xmpp_core.commands import CommandHelpDocument, render_command_help_document
+
+    spec: CommandSpec[object] = CommandSpec(
+        name="policy",
+        subcommands=(
+            SubcommandSpec("show", "{prefix}policy show", ""),
+            SubcommandSpec("set", "{prefix}policy set <text>", ""),
+        ),
+        examples=(CommandExample("{prefix}policy show"),),
+    )
+    doc = CommandHelpDocument(spec, notes="Supported placeholders: {prefix}, {room}", trailing_newlines=2)
+    assert render_command_help_document(doc, "!") == (
+        "Usage:\n  !policy show\n  !policy set <text>\n\n"
+        "Examples:\n  !policy show\n\n"
+        "Supported placeholders: {prefix}, {room}\n\n"
+    )
+
+
+def test_command_help_document_rejects_invalid_inline_subcommands() -> None:
+    from envs_xmpp_core.commands import CommandHelpDocument, render_command_help_document
+
+    spec: CommandSpec[object] = CommandSpec(
+        name="demo", usage="{prefix}demo", subcommands=(SubcommandSpec("run", "{prefix}demo run", ""),)
+    )
+    with pytest.raises(ValueError, match="Inline help"):
+        render_command_help_document(CommandHelpDocument(spec, inline=True), "!")
+
+
+def test_sectioned_command_help_renders_stable_order_and_custom_prefix() -> None:
+    from envs_xmpp_core.commands import CommandHelpSection, render_command_help_sections
+
+    sections = (
+        CommandHelpSection("Runtime", ("{prefix}status - status", "{prefix}restart confirm - restart")),
+        CommandHelpSection("OMEMO", ("{prefix}omemo status - show state",)),
+    )
+    assert render_command_help_sections(sections, "!") == (
+        "Runtime\n!status - status\n!restart confirm - restart\n\nOMEMO\n!omemo status - show state"
+    )
+    assert render_command_help_sections(sections, "/") == (
+        "Runtime\n/status - status\n/restart confirm - restart\n\nOMEMO\n/omemo status - show state"
+    )
+    assert render_command_help_sections((), "!") == ""

@@ -208,3 +208,59 @@ def parse_prefixed_command(body: str, prefix: str) -> tuple[str, list[str]] | No
     if not parts:
         return None
     return parts[0][len(prefix):].lower(), parts[1:]
+
+
+@dataclass(frozen=True, slots=True)
+class CommandHelpDocument:
+    """Usage layout for a command; all permission/dispatch policy stays in the bot.
+
+    ``command`` contains structured usage/subcommands/examples. ``notes`` is
+    literal explanatory text (e.g. documented ``{room}`` placeholders) and is
+    intentionally *not* interpreted as a format template.
+    """
+
+    command: CommandSpec[object]
+    inline: bool = False
+    notes: str = ""
+    trailing_newlines: int = 0
+
+
+def render_command_help_document(document: CommandHelpDocument, prefix: str) -> str:
+    """Render structured command usage and examples without changing legacy layout."""
+    if document.inline:
+        if document.command.subcommands:
+            raise ValueError("Inline help documents cannot define subcommands")
+        usage = document.command.usage.format(prefix=prefix)
+        body = f"Usage: {usage}" if usage else ""
+    else:
+        body = render_subcommand_usage(document.command, prefix)
+
+    if document.command.examples:
+        examples = format_command_examples(document.command.examples, prefix)
+        examples_text = "\n".join(
+            f"  {example.command}" + (f" - {example.description}" if example.description else "")
+            for example in examples
+        )
+        body += f"\n\nExamples:\n{examples_text}"
+    if document.notes:
+        body += f"\n\n{document.notes}"
+    return body + "\n" * document.trailing_newlines
+
+
+@dataclass(frozen=True, slots=True)
+class CommandHelpSection:
+    """Ordered operator-help section, independent of authorization policy."""
+
+    title: str
+    entries: tuple[str, ...]
+
+
+def render_command_help_sections(
+    sections: Iterable[CommandHelpSection], prefix: str, *, trailing_newline: bool = False
+) -> str:
+    """Render sections in order with caller-selected terminal newline behavior."""
+    text = "\n\n".join(
+        "\n".join((section.title, *(entry.replace("{prefix}", prefix) for entry in section.entries)))
+        for section in sections
+    )
+    return text + "\n" if text and trailing_newline else text

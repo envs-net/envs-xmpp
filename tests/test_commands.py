@@ -22,6 +22,7 @@ from envs_xmpp_core.commands import (
     render_subcommand_usage,
     resolve_help_topic,
     resolve_longest_command,
+    resolve_structured_subcommand,
 )
 
 
@@ -184,3 +185,77 @@ def test_sectioned_command_help_renders_stable_order_and_custom_prefix() -> None
         "Runtime\n/status - status\n/restart confirm - restart\n\nOMEMO\n/omemo status - show state"
     )
     assert render_command_help_sections((), "!") == ""
+
+
+def test_shared_structured_subcommand_matching_and_aliases() -> None:
+    invite: CommandSpec[object] = CommandSpec(
+        name="room invite",
+        subcommands=(
+            SubcommandSpec("list", "list", "List invitations"),
+            SubcommandSpec("decline", "decline", "Decline", aliases=("remove", "rm")),
+            SubcommandSpec("<id>", "<id>", "Placeholder is not a literal command"),
+        ),
+    )
+    room: CommandSpec[object] = CommandSpec(
+        name="room",
+        subcommands=(SubcommandSpec("remove", "remove", "Remove room"),),
+    )
+    commands = {("room",): room, ("room", "invite"): invite, ("rooms", "invite"): invite}
+    match, subcommand, remainder = resolve_structured_subcommand(
+        "ROOMS invite rm Alice@Example.ORG", commands, subcommands=lambda cmd: cmd.subcommands
+    )
+    assert match is invite
+    assert subcommand == invite.subcommands[1]
+    assert remainder == ["Alice@Example.ORG"]
+    assert resolve_structured_subcommand(
+        ["room", "remove"], commands, subcommands=lambda cmd: cmd.subcommands
+    )[:2] == (room, room.subcommands[0])
+    assert resolve_structured_subcommand(
+        "room invite <id>", commands, subcommands=lambda cmd: cmd.subcommands
+    )[:2] == (None, None)
+    assert resolve_structured_subcommand(
+        "room invite", commands, subcommands=lambda cmd: cmd.subcommands
+    ) == (None, None, ["room", "invite"])
+
+
+def test_subcommand_resolution_is_permission_neutral() -> None:
+    privileged = CommandSpec(
+        name="secure",
+        subcommands=(SubcommandSpec("reset", "reset", "Reset", role="admin"),),
+    )
+    catalog = {("secure",): privileged}
+    unrestricted = resolve_structured_subcommand(
+        "secure reset", catalog, subcommands=lambda cmd: cmd.subcommands
+    )
+    assert unrestricted[:2] == (privileged, privileged.subcommands[0])
+    restricted = resolve_structured_subcommand(
+        "secure reset", catalog, subcommands=lambda cmd: (sub for sub in cmd.subcommands if sub.role != "admin")
+    )
+    assert restricted[:2] == (None, None)
+
+
+def test_structured_subcommand_prefers_longest_alias() -> None:
+    spec = CommandSpec(
+        name="room",
+        subcommands=(
+            SubcommandSpec("invite", "invite", "Invite"),
+            SubcommandSpec("invites all", "invites all", "All", aliases=("inv all",)),
+        ),
+    )
+    commands = {("room",): spec}
+    match = resolve_structured_subcommand(
+        "room inv ALL extra", commands, subcommands=lambda cmd: cmd.subcommands
+    )
+    assert match == (spec, spec.subcommands[1], ["extra"])
+
+
+def test_more_specific_registered_command_wins_equal_length_subcommand() -> None:
+    base = CommandSpec(name="room", subcommands=(SubcommandSpec("invite rm", "base", "base"),))
+    nested = CommandSpec(name="room invite", subcommands=(SubcommandSpec("decline", "nested", "nested", aliases=("rm",)),))
+    # The root command is deliberately listed first, but must not shadow
+    # the more specific nested command's help metadata.
+    matched = resolve_structured_subcommand(
+        "room invite RM", {("room",): base, ("room", "invite"): nested},
+        subcommands=lambda cmd: cmd.subcommands,
+    )
+    assert matched == (nested, nested.subcommands[0], [])

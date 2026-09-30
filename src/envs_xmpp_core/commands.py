@@ -148,6 +148,46 @@ def resolve_longest_command[CommandT](
     return None, parts
 
 
+
+def resolve_structured_subcommand[CommandT, SubcommandT](
+    topic: str | Iterable[str],
+    commands: Mapping[tuple[str, ...], CommandT],
+    *,
+    subcommands: Callable[[CommandT], Iterable[SubcommandT]],
+) -> tuple[CommandT | None, SubcommandT | None, list[str]]:
+    """Match a documented subcommand/alias by longest token prefix.
+
+    Command keys may contain multiple words and aliases. A subcommand may
+    contain multiple words or aliases as well. Placeholder names (``<id>``,
+    ``[option]`` and similar) are documentation, not literal command tokens.
+    Role/visibility filtering belongs to the caller: pass only permitted
+    commands and subcommands. This function never authorizes or dispatches.
+    """
+    words = topic.split() if isinstance(topic, str) else [str(word) for word in topic]
+    index: dict[tuple[str, ...], tuple[CommandT, SubcommandT]] = {}
+    root_lengths: dict[tuple[str, ...], int] = {}
+    for registered, command in commands.items():
+        root = command_tokens(registered)
+        if not root:
+            continue
+        for subcommand in subcommands(command):
+            for name in (getattr(subcommand, "name", ""), *getattr(subcommand, "aliases", ())):
+                name_parts = command_tokens(name)
+                if not name_parts or name_parts[0].startswith(("<", "[", "{", "...")):
+                    continue
+                key = (*root, *name_parts)
+                # For equally long invocations, the more specific *registered*
+                # command wins (e.g. "room invite" over "room").
+                if len(root) > root_lengths.get(key, 0):
+                    index[key] = (command, subcommand)
+                    root_lengths[key] = len(root)
+    found, remaining = resolve_longest_command(" ".join(words), index)
+    if found is None:
+        return None, None, remaining
+    command, subcommand = found
+    return command, subcommand, remaining
+
+
 def is_command_family(prefix: str | Iterable[str], keys: Iterable[tuple[str, ...]]) -> bool:
     """Identify prefixes with descendants, excluding exact-only commands."""
     words = command_tokens(prefix)

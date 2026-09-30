@@ -36,6 +36,24 @@ default/type/range/lifecycle metadata; each bot keeps its domain-specific valida
 reload behavior and operator-facing wording local. Pagination provides a neutral page-slice
 model while bot frontends retain their existing command-specific return formats.
 
+## Shared command and help contracts (development)
+
+`envs_xmpp_core.commands` contains **metadata-only** primitives shared by
+`envsbot` and `muc_banbot`. `CommandSpec` and `SubcommandSpec` describe help
+and usage without creating runnable bot commands. The shared
+`resolve_structured_subcommand()` function matches multiword commands and
+subcommand aliases with longest-match precedence; when two matches span the
+same input, the more specific registered command takes priority. Arguments
+retain their original casing, and placeholder names are never treated as
+literal invocations. `resolve_help_topic()` provides chained, nested topic
+alias normalization.
+
+**Security boundary:** callers must filter commands and subcommands according
+to the requesting user's role *before* using the resolver. Actual dispatch,
+authorization, room policy and user-facing help presentation remain the
+responsibility of each bot. These development interfaces do not change the
+published package version until the planned joint release.
+
 ## Installation
 
 Install the stable package from PyPI:

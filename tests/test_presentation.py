@@ -17,10 +17,14 @@ from envs_xmpp_core.presentation import (
     render_session_lifecycle_lines,
     render_status_sections,
     render_task_entry,
+    render_task_overview,
     render_task_summary,
+    room_list_preamble,
+    room_list_title,
     room_problem_views,
     room_summary,
     summarize_tasks,
+    task_list_title,
 )
 from envs_xmpp_core.runtime import SessionLifecycleSnapshot
 
@@ -116,6 +120,32 @@ def test_task_request_rejects_conflicting_filters() -> None:
     assert request.error == "conflicting task filters"
 
 
+def test_task_title_and_overview_are_shared_operator_contract() -> None:
+    request = parse_task_list_request(["full", "scope", "rss", "failed"])
+    assert task_list_title(request) == "🧵 Background Tasks — scope=rss — failed — full"
+
+    tasks = normalize_tasks(
+        [
+            Task("rss", "feed-loop", "running"),
+            Task("core", "worker", "failed", last_error="boom"),
+        ]
+    )
+    lines = render_task_overview(
+        tasks,
+        watchdog_state={
+            "enabled": True,
+            "worker_running": True,
+            "systemd_active": True,
+            "heartbeats": 4,
+        },
+    )
+    text = "\n".join(lines)
+    assert lines[0] == "🧵 Background Tasks"
+    assert "⚠️ Problems" in text
+    assert "core/worker" in text
+    assert "🐕 Runtime Watchdog" in text
+
+
 def test_room_rendering_summary_and_problem_filter() -> None:
     rooms = [
         RoomView("good@example.org", True, ("affiliation=owner",)),
@@ -133,6 +163,17 @@ def test_parse_and_filter_room_request() -> None:
     assert request == RoomListRequest(filter="problems", page=PageRequest(all=True))
     rooms = [RoomView("ok@example.org", True), RoomView("bad@example.org", False)]
     assert [room.jid for room in filter_room_views(rooms, request)] == ["bad@example.org"]
+
+
+def test_room_inventory_title_and_preamble_are_shared_operator_contract() -> None:
+    rooms = [RoomView("ok@example.org", True), RoomView("bad@example.org", False)]
+    request = RoomListRequest(filter="problems", page=PageRequest(all=True))
+    assert room_list_title(request) == "📋 Rooms — problems"
+    assert room_list_preamble(rooms, request) == [
+        "Summary: 2 configured · 1 joined · 1 issue",
+        "Legend: 🟢 joined · 🟠 attention · 🔴 unavailable · ⚪ not joined",
+        "View: problems · 1 match(es)",
+    ]
 
 
 def test_room_request_rejects_duplicate_filters() -> None:

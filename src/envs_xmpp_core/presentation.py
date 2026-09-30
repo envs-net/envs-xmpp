@@ -57,6 +57,8 @@ _TASK_MODE_ALIASES = {
     "problem": "problems",
 }
 
+ROOM_LIST_LEGEND = "Legend: 🟢 joined · 🟠 attention · 🔴 unavailable · ⚪ not joined"
+
 
 @dataclass(frozen=True)
 class StatusField:
@@ -367,6 +369,43 @@ def render_task_summary(
     return lines
 
 
+def task_list_title(
+    request: TaskListRequest,
+    *,
+    title: str = "🧵 Background Tasks",
+) -> str:
+    """Return the shared title used by task inventory commands."""
+    qualifiers: list[str] = []
+    if request.scope:
+        qualifiers.append(f"scope={request.scope}")
+    if request.mode not in {"overview", "inventory"}:
+        qualifiers.append(request.mode)
+    if request.full:
+        qualifiers.append("full")
+    return title + (" — " + " — ".join(qualifiers) if qualifiers else "")
+
+
+def render_task_overview(
+    tasks: Iterable[TaskView],
+    *,
+    watchdog_state: Mapping[str, Any] | None = None,
+    problem_limit: int = 5,
+) -> list[str]:
+    """Render the common health-first task overview used by both bots."""
+    views = list(tasks)
+    lines = [task_list_title(TaskListRequest()), "", *render_task_summary(views)]
+    problems = filter_task_views(views, TaskListRequest(mode="problems"))
+    if problems:
+        lines.extend(["", "⚠️ Problems"])
+        lines.extend(
+            render_task_entry(view, full=False)
+            for view in problems[: max(0, int(problem_limit))]
+        )
+    if watchdog_state is not None:
+        lines.extend(["", "🐕 Runtime Watchdog", *render_watchdog_lines(watchdog_state)])
+    return lines
+
+
 def render_task_entry(view: TaskView, *, full: bool = False, now: float | None = None) -> str:
     """Render one task as a compact or diagnostic multi-line block."""
     state = "stale" if view.stale else view.status
@@ -620,6 +659,35 @@ def room_summary(rooms: Iterable[RoomView]) -> str:
         values.append(f"{len(views)} known")
     values.extend([f"{joined} joined", f"{problems} issue{'s' if problems != 1 else ''}"])
     return "Summary: " + " · ".join(values)
+
+
+def room_list_title(
+    request: RoomListRequest,
+    *,
+    title: str = "📋 Rooms",
+) -> str:
+    """Return a consistent title for room inventory commands."""
+    return title + (f" — {request.filter}" if request.filter != "all" else "")
+
+
+def room_list_preamble(
+    all_rooms: Iterable[RoomView],
+    request: RoomListRequest,
+    *,
+    matching_count: int | None = None,
+    legend: str = ROOM_LIST_LEGEND,
+) -> list[str]:
+    """Render the common room summary, legend, and optional active filter."""
+    rooms = list(all_rooms)
+    lines = [room_summary(rooms), legend]
+    if request.filter != "all":
+        count = (
+            len(filter_room_views(rooms, request))
+            if matching_count is None
+            else max(0, int(matching_count))
+        )
+        lines.append(f"View: {request.filter} · {count} match(es)")
+    return lines
 
 
 def room_problem_views(rooms: Iterable[RoomView]) -> list[RoomView]:

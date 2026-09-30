@@ -143,6 +143,13 @@ async def wait_for_event_with_heartbeat(
 
 @dataclass(frozen=True)
 class TaskInfo:
+    """Canonical read-only state for one supervised task.
+
+    ``scope`` is the neutral owner identifier used by the shared runtime.
+    Applications may call that owner a plugin or group at their API boundary,
+    but snapshots intentionally expose one common model.
+    """
+
     scope: str
     name: str
     status: str
@@ -155,6 +162,21 @@ class TaskInfo:
     circuit_state: str = "closed"
     next_restart_at: str | None = None
     kind: str = "one-shot"
+
+    @property
+    def identity(self) -> tuple[str, str]:
+        """Return the stable ``(scope, name)`` identity used by diagnostics."""
+        return (self.scope, self.name)
+
+    @property
+    def plugin(self) -> str:
+        """Compatibility alias for older envsbot snapshot consumers."""
+        return self.scope
+
+    @property
+    def group(self) -> str:
+        """Compatibility alias for older muc_banbot snapshot consumers."""
+        return self.scope
 
 
 class TaskSupervisor:
@@ -597,7 +619,11 @@ class TaskSupervisor:
             else:
                 cancelled = False
                 last_error = meta.get("last_error")
-                status = "running"
+                status = (
+                    "restarting"
+                    if str(meta.get("circuit_state") or "closed") == "half-open"
+                    else "running"
+                )
             items.append(
                 TaskInfo(
                     scope=meta["scope"],

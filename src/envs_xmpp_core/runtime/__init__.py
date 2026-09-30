@@ -17,6 +17,7 @@ from .health import (
 from .reconnect import run_reconnect_loop
 from .session import SessionLifecycleSnapshot, SessionLifecycleState
 from .suppression import CooldownDecision, KeyedCooldown
+from .tasks import TaskInfo
 
 __all__ = [
     "AlertTracker",
@@ -29,6 +30,7 @@ __all__ = [
     "SessionLifecycleSnapshot",
     "SessionLifecycleState",
     "TaskHealthState",
+    "TaskInfo",
     "TransitionAlertState",
     "WatchdogHealthState",
     "analyze_room_join_state",

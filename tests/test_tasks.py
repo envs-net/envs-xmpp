@@ -117,6 +117,30 @@ async def test_wait_for_event_with_heartbeat_and_runtime_gate(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_snapshot_uses_canonical_scope_model_for_restarting_tasks():
+    supervisor = TaskSupervisor()
+
+    async def worker():
+        await asyncio.Event().wait()
+
+    task = supervisor.create("feeds", worker(), name="poller", kind="service")
+    supervisor._tasks[task]["circuit_state"] = "half-open"
+    supervisor._tasks[task]["next_restart_at"] = "2026-09-30T08:00:00+00:00"
+
+    info = supervisor.snapshot(include_done=False)[0]
+    assert info.scope == "feeds"
+    assert info.identity == ("feeds", "poller")
+    assert info.status == "restarting"
+    assert info.circuit_state == "half-open"
+    assert info.next_restart_at == "2026-09-30T08:00:00+00:00"
+    # Compatibility aliases remain read-only while applications migrate to scope.
+    assert info.plugin == info.scope
+    assert info.group == info.scope
+
+    await supervisor.cancel_scope("feeds", timeout=1.0)
+
+
+@pytest.mark.asyncio
 async def test_stale_tasks_uses_neutral_snapshot_contract_in_subclasses():
     class CompatibilitySupervisor(TaskSupervisor):
         def snapshot(self, *, include_done=True):

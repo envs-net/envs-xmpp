@@ -275,3 +275,37 @@ async def test_encrypt_and_send_empty_and_no_progress_failures():
 
     with pytest.raises(RuntimeError, match="someone-else"):
         await encrypt_and_send(MissingPlugin(), object(), {"a@example.org"}, mto="room@example.org")
+
+
+@pytest.mark.asyncio
+async def test_encrypt_and_send_stamps_actual_encrypted_wire_stanza_with_durable_id():
+    from envs_xmpp_core.xmpp.omemo import encrypt_and_send
+
+    class WireMessage:
+        def __init__(self):
+            self.fields = {"origin_id": {}}
+            self.sent = False
+
+        def __getitem__(self, key):
+            return self.fields[key]
+
+        def __setitem__(self, key, value):
+            self.fields[key] = value
+
+        def send(self):
+            self.sent = True
+
+    encrypted_stanza = WireMessage()
+
+    class Encryptor:
+        async def encrypt_message(self, _msg, _recipients):
+            return encrypted_stanza
+
+    result = await encrypt_and_send(
+        Encryptor(), object(), "alice@example.org",
+        mto="alice@example.org", origin_id="persisted-123",
+    )
+    assert result is encrypted_stanza
+    assert encrypted_stanza.sent
+    assert encrypted_stanza["id"] == "persisted-123"
+    assert encrypted_stanza["origin_id"]["id"] == "persisted-123"

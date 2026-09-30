@@ -213,3 +213,14 @@ recipient or an authorization decision. An occupant's real JID is recorded
 only when the application provides one explicitly. XEP-0359 `origin-id` and
 the ordinary stanza `id` are kept separate. This helper does not persist
 decrypted messages or change either bot's encryption, caching or admin policy.
+
+### Shared reply and outbound delivery planning
+
+`envs_xmpp_core.xmpp.outbound` provides `plan_outbound_message`,
+`resolve_reply_encryption`, `can_persist_without_encryption_context`, and
+`ensure_message_origin_id`. These are transport-neutral contracts: an explicit
+OMEMO reply is **not** eligible for plaintext outbox persistence, and the
+same persisted XEP-0359 origin-id should be reused on every replay, including
+newly produced encrypted wire stanzas (`encrypt_and_send(..., origin_id=...)`).
+The application still owns encryption recipients, opt-in fallback policy,
+transport readiness, and its own queue-first or send-first retry strategy.

@@ -9,6 +9,7 @@ from collections.abc import Set as AbstractSet
 from typing import Any
 
 from ..jid import bare_jid
+from ..outbound import ensure_message_origin_id
 
 OMEMO_NAMESPACES = (
     "eu.siacs.conversations.axolotl",
@@ -140,10 +141,11 @@ async def encrypt_and_send(
     recipients: set[Any] | Any,
     *,
     mto: str,
+    origin_id: str | None = None,
 ) -> Any:
-    """Encrypt and send one stanza, retrying after unusable MUC recipients."""
+    """Encrypt and send, reusing a durable origin-id on actual wire stanzas."""
     if not isinstance(recipients, set):
-        return await _encrypt_and_send_once(plugin, msg, recipients, mto=mto)
+        return await _encrypt_and_send_once(plugin, msg, recipients, mto=mto, origin_id=origin_id)
 
     current = set(recipients)
     skipped: set[str] = set()
@@ -151,7 +153,7 @@ async def encrypt_and_send(
         if not current:
             raise RuntimeError(f"No usable OMEMO recipients left for {mto}")
         try:
-            return await _encrypt_and_send_once(plugin, msg, current, mto=mto)
+            return await _encrypt_and_send_once(plugin, msg, current, mto=mto, origin_id=origin_id)
         except Exception as exc:
             missing = extract_unusable_recipients(exc)
             if not missing:
@@ -176,7 +178,10 @@ async def encrypt_and_send(
     raise RuntimeError(f"Could not encrypt OMEMO message for {mto}; skipped {len(skipped)} recipient(s)")
 
 
-async def _encrypt_and_send_once(plugin: Any, msg: Any, recipients: set[Any] | Any, *, mto: str) -> Any:
+async def _encrypt_and_send_once(
+    plugin: Any, msg: Any, recipients: set[Any] | Any, *,
+    mto: str, origin_id: str | None = None,
+) -> Any:
     result = await plugin.encrypt_message(msg, recipients)
     encrypted_messages, errors = result if isinstance(result, tuple) and len(result) == 2 else (result, None)
     if not encrypted_messages:
@@ -187,9 +192,13 @@ async def _encrypt_and_send_once(plugin: Any, msg: Any, recipients: set[Any] | A
     if isinstance(encrypted_messages, Mapping):
         for encrypted_msg in encrypted_messages.values():
             echo = encrypted_msg
+            if origin_id is not None:
+                ensure_message_origin_id(encrypted_msg, origin_id, require_stanza_id=True)
             encrypted_msg.send()
     else:
         echo = encrypted_messages
+        if origin_id is not None:
+            ensure_message_origin_id(echo, origin_id, require_stanza_id=True)
         echo.send()
     return echo
 

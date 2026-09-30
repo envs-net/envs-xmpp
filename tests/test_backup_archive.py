@@ -12,6 +12,7 @@ from envs_xmpp_core.storage.backup import (
     BackupArchiveError,
     BackupArchiveSource,
     build_backup_archive,
+    inspect_backup_companion_pair,
     read_backup_manifest,
     stage_backup_archive,
     verify_backup_archive,
@@ -215,3 +216,28 @@ def test_stage_backup_archive_validates_entry_specs(tmp_path: Path):
                 BackupArchiveEntrySpec("same", "two"),
             ],
         )
+
+
+@pytest.mark.parametrize(
+    ("members", "state", "available"),
+    [
+        (set(), "absent", ()),
+        ({"omemo.json"}, "incomplete", ("omemo.json",)),
+        ({"omemo.identity.json"}, "incomplete", ("omemo.identity.json",)),
+        ({"omemo.json", "omemo.identity.json"}, "complete", ("omemo.json", "omemo.identity.json")),
+    ],
+)
+def test_omemo_companion_pair_contract(members, state, available):
+    pair = inspect_backup_companion_pair(
+        members, primary="omemo.json", companion="omemo.identity.json"
+    )
+    assert pair.state == state
+    assert pair.available == available
+    assert pair.complete is (state == "complete")
+    assert pair.incomplete is (state == "incomplete")
+
+
+def test_backup_companion_pair_rejects_invalid_member_names():
+    for first, second in (("", "identity"), ("state", ""), ("state", "state")):
+        with pytest.raises(ValueError, match="distinct non-empty"):
+            inspect_backup_companion_pair(set(), primary=first, companion=second)

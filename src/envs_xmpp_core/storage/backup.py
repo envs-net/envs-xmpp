@@ -7,11 +7,11 @@ import json
 import os
 import tempfile
 import zipfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .archive import (
     UnsafeArchiveMember,
@@ -26,6 +26,66 @@ DEFAULT_MANIFEST_NAME = "manifest.json"
 
 class BackupArchiveError(ValueError):
     """Raised when a managed backup archive is invalid or cannot be built."""
+
+
+@dataclass(frozen=True, slots=True)
+class BackupCompanionPair:
+    """Presence of two inseparable backup members (for example OMEMO state and identity).
+
+    This describes *presence*, not JSON validity or consistency of the file
+    contents.  The existing archive verifier and application-specific checks
+    remain responsible for those validations.
+    """
+
+    primary: str
+    companion: str
+    primary_present: bool
+    companion_present: bool
+
+    @property
+    def state(self) -> Literal["absent", "complete", "incomplete"]:
+        if self.primary_present and self.companion_present:
+            return "complete"
+        if self.primary_present or self.companion_present:
+            return "incomplete"
+        return "absent"
+
+    @property
+    def complete(self) -> bool:
+        return self.state == "complete"
+
+    @property
+    def incomplete(self) -> bool:
+        return self.state == "incomplete"
+
+    @property
+    def available(self) -> tuple[str, ...]:
+        return tuple(
+            name
+            for name, present in (
+                (self.primary, self.primary_present),
+                (self.companion, self.companion_present),
+            )
+            if present
+        )
+
+
+def inspect_backup_companion_pair(
+    available: Collection[str], *, primary: str, companion: str
+) -> BackupCompanionPair:
+    """Inspect two archive members or local source names with the same rules.
+
+    Callers may omit an incomplete *optional* pair from backup/restore plans,
+    but must not silently publish just one half as a valid identity pair.
+    """
+    if not primary or not companion or primary == companion:
+        raise ValueError("companion pair requires two distinct non-empty names")
+    return BackupCompanionPair(
+        primary=primary,
+        companion=companion,
+        primary_present=primary in available,
+        companion_present=companion in available,
+    )
 
 
 @dataclass(frozen=True)

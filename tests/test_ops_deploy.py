@@ -829,6 +829,31 @@ def test_deployment_frontend_binds_confirmation_error_type(monkeypatch):
         frontend.require_confirmation("Continue")
 
 
+def test_deployment_frontend_requires_service_account(monkeypatch, tmp_path: Path):
+    import envs_xmpp_ops.frontend as frontend_module
+    from envs_xmpp_ops.frontend import DeploymentFrontend
+
+    class DeployError(RuntimeError):
+        pass
+
+    deployment = _frontend_target(tmp_path)
+    frontend = DeploymentFrontend(
+        project_name="bot",
+        release_remote_environment="BOT_DEPLOY_REMOTE",
+        error_factory=DeployError,
+    )
+
+    monkeypatch.setattr(frontend_module.pwd, "getpwnam", lambda _user: object())
+    frontend.require_service_account(deployment)
+
+    def missing(_user: str):
+        raise KeyError(_user)
+
+    monkeypatch.setattr(frontend_module.pwd, "getpwnam", missing)
+    with pytest.raises(DeployError, match="service user 'bot' does not exist"):
+        frontend.require_service_account(deployment)
+
+
 def test_deployment_frontend_resolves_constraints_and_dependency_drift(monkeypatch, tmp_path: Path):
     import envs_xmpp_ops.frontend as frontend_module
     from envs_xmpp_ops.dependency_drift import DependencyDriftReport

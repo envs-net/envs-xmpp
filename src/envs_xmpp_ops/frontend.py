@@ -144,6 +144,14 @@ class DeploymentFrontend:
         """Return whether a local service account exists."""
         return account_exists(user, getpwnam=pwd.getpwnam)
 
+    def require_service_account(self, deployment: FrontendDeployment) -> None:
+        """Require the configured local service account to exist."""
+        if not self.account_exists(deployment.service_user):
+            raise self.error_factory(
+                f"service user {deployment.service_user!r} does not exist; "
+                "create it manually or use --user"
+            )
+
     def systemd_property(self, service: str, prop: str) -> str:
         """Read one systemd property using the live subprocess runner."""
         return systemd_property(service, prop, run_process=subprocess.run)

@@ -83,6 +83,7 @@ from envs_xmpp_core.xmpp import (
 from envs_xmpp_ops import (
     DependencyDriftReport,
     DependencyVersion,
+    DeploymentFrontend,
     DeploymentProfile,
     DeploymentTarget,
     deployment_environment,
@@ -100,7 +101,7 @@ from envs_xmpp_ops import (
 
 
 def test_distribution_version_is_current() -> None:
-    assert __version__ == "1.7.1"
+    assert __version__ == "1.7.2"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:
@@ -145,8 +146,6 @@ def test_stable_convenience_imports_are_exposed() -> None:
         TaskLocalReplyRoute,
         TaskLocalEncryptionMode,
         OMEMO_AVAILABLE,
-    TaskLocalEncryptionMode,
-    OMEMO_AVAILABLE,
         avatar_sha1,
         bare_jid,
         await_muc_join_compat,
@@ -182,12 +181,12 @@ def test_stable_convenience_imports_are_exposed() -> None:
         xmpp_strict_active,
         DependencyDriftReport,
         DependencyVersion,
+        DeploymentFrontend,
         DeploymentProfile,
         DeploymentTarget,
         deployment_environment,
         inspect_dependency_drift,
         require_clean_dependency_drift,
-    require_clean_dependency_drift,
         resolve_environment_path,
         service_account,
         split_systemd_words,

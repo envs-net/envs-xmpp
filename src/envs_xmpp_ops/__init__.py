@@ -9,6 +9,7 @@ from .dependency_drift import (
     require_clean_dependency_drift,
 )
 from .deploy import DeploymentTarget
+from .frontend import DeploymentFrontend
 from .layout import (
     deployment_environment,
     resolve_environment_path,
@@ -25,6 +26,7 @@ from .profile import DeploymentProfile
 __all__ = [
     "DependencyDriftReport",
     "DependencyVersion",
+    "DeploymentFrontend",
     "DeploymentProfile",
     "DeploymentTarget",
     "__version__",

@@ -753,3 +753,155 @@ def test_require_clean_dependency_drift_preserves_frontend_error_type(tmp_path: 
         match=r"runtime dependency drift detected: demo: installed 2\.0, expected 1\.0",
     ):
         require_clean_dependency_drift(report, error_factory=DeployError)
+
+
+def _frontend_target(tmp_path: Path):
+    from envs_xmpp_ops.deploy import DeploymentTarget
+
+    class Target(DeploymentTarget):
+        @property
+        def environment(self) -> dict[str, str]:
+            return {"BOT_CONFIG": str(self.config)}
+
+    root = tmp_path / "checkout"
+    venv = root / ".venv"
+    root.mkdir()
+    (venv / "bin").mkdir(parents=True)
+    return Target(
+        root=root,
+        venv=venv,
+        config=root / "config.py",
+        service="bot.service",
+        service_user="bot",
+        service_group="bot",
+        unit=tmp_path / "bot.service",
+        python="python3",
+    )
+
+
+def test_deployment_frontend_binds_process_and_git_policy(monkeypatch, tmp_path: Path):
+    import envs_xmpp_ops.frontend as frontend_module
+    from envs_xmpp_ops.frontend import DeploymentFrontend
+
+    deployment = _frontend_target(tmp_path)
+    calls: list[tuple[list[object], dict[str, object]]] = []
+
+    def fake_run(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return _result(stdout="v1.7.2\n")
+
+    monkeypatch.setattr(frontend_module, "run_deploy_command", fake_run)
+    frontend = DeploymentFrontend(
+        project_name="bot",
+        release_remote_environment="BOT_DEPLOY_REMOTE",
+        announce_prefix="$",
+        default_cwd_to_deployment_root=True,
+    )
+
+    frontend.run(["tool"], deployment=deployment, as_service_user=True)
+    frontend.git(deployment, "status", capture=True)
+
+    assert calls[0][0] == ["tool"]
+    assert calls[0][1]["cwd"] == deployment.root
+    assert calls[0][1]["env"] == deployment.environment
+    assert calls[0][1]["service_user"] == "bot"
+    assert calls[0][1]["announce_prefix"] == "$"
+    assert calls[1][0] == ["git", "status"]
+    assert calls[1][1]["cwd"] == deployment.root
+    assert calls[1][1]["capture"] is True
+
+
+def test_deployment_frontend_binds_confirmation_error_type(monkeypatch):
+    from envs_xmpp_ops.frontend import DeploymentFrontend
+
+    class Cancelled(RuntimeError):
+        pass
+
+    frontend = DeploymentFrontend(
+        project_name="bot",
+        release_remote_environment="BOT_DEPLOY_REMOTE",
+        cancelled_error_factory=Cancelled,
+    )
+    monkeypatch.setattr("builtins.input", lambda _prompt: "no")
+
+    assert frontend.confirm("Continue") is False
+    with pytest.raises(Cancelled, match="cancelled by operator"):
+        frontend.require_confirmation("Continue")
+
+
+def test_deployment_frontend_resolves_constraints_and_dependency_drift(monkeypatch, tmp_path: Path):
+    import envs_xmpp_ops.frontend as frontend_module
+    from envs_xmpp_ops.dependency_drift import DependencyDriftReport
+    from envs_xmpp_ops.frontend import DeploymentFrontend
+
+    deployment = _frontend_target(tmp_path)
+    deployment.venv_python.write_text("", encoding="utf-8")
+    constraints = deployment.root / "constraints/python313.txt"
+    constraints.parent.mkdir()
+    constraints.write_text("envs-xmpp==1.7.2\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        frontend_module,
+        "run_deploy_command",
+        lambda *_args, **_kwargs: _result(stdout="3.13\n"),
+    )
+    report = DependencyDriftReport(constraint_file=constraints, dependencies=())
+    monkeypatch.setattr(frontend_module, "inspect_dependency_drift", lambda *_args: report)
+
+    frontend = DeploymentFrontend(
+        project_name="bot",
+        release_remote_environment="BOT_DEPLOY_REMOTE",
+    )
+
+    assert frontend.venv_version(deployment) == (3, 13)
+    assert frontend.constraint_file(deployment) == constraints
+    assert frontend.dependency_drift(deployment) is report
+
+
+def test_deployment_frontend_rejects_unsupported_python(monkeypatch, tmp_path: Path):
+    import envs_xmpp_ops.frontend as frontend_module
+    from envs_xmpp_ops.frontend import DeploymentFrontend
+
+    class DeployError(RuntimeError):
+        pass
+
+    deployment = _frontend_target(tmp_path)
+    deployment.venv_python.write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        frontend_module,
+        "run_deploy_command",
+        lambda *_args, **_kwargs: _result(stdout="3.15\n"),
+    )
+    frontend = DeploymentFrontend(
+        project_name="bot",
+        release_remote_environment="BOT_DEPLOY_REMOTE",
+        error_factory=DeployError,
+    )
+
+    with pytest.raises(DeployError, match=r"bot supports Python 3\.12/3\.13/3\.14"):
+        frontend.constraint_file(deployment)
+
+
+def test_deployment_frontend_binds_release_remote(monkeypatch, tmp_path: Path):
+    import envs_xmpp_ops.frontend as frontend_module
+    from envs_xmpp_ops.frontend import DeploymentFrontend
+
+    deployment = _frontend_target(tmp_path)
+    observed: dict[str, object] = {}
+
+    def fake_prepare(run_git_command, requested_tag, **kwargs):
+        observed["runner"] = run_git_command
+        observed["requested"] = requested_tag
+        observed.update(kwargs)
+        return "upstream", "v2.0.0"
+
+    monkeypatch.setattr(frontend_module, "prepare_release_target", fake_prepare)
+    monkeypatch.setenv("BOT_DEPLOY_REMOTE", "upstream")
+    frontend = DeploymentFrontend(
+        project_name="bot",
+        release_remote_environment="BOT_DEPLOY_REMOTE",
+    )
+
+    assert frontend.prepare_release_target(deployment, "v2.0.0") == ("upstream", "v2.0.0")
+    assert observed["requested"] == "v2.0.0"
+    assert observed["configured_remote"] == "upstream"

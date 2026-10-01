@@ -6,6 +6,7 @@ from .dependency_drift import (
     DependencyDriftReport,
     DependencyVersion,
     inspect_dependency_drift,
+    require_clean_dependency_drift,
 )
 from .deploy import DeploymentTarget
 from .layout import (
@@ -29,6 +30,7 @@ __all__ = [
     "__version__",
     "deployment_environment",
     "inspect_dependency_drift",
+    "require_clean_dependency_drift",
     "resolve_environment_path",
     "service_account",
     "split_systemd_words",

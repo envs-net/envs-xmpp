@@ -713,3 +713,43 @@ def test_deployment_target_owns_common_venv_and_environment_helpers(tmp_path):
     environment = target.environment_for("EXAMPLE_CONFIG", disable_bytecode=True)
     assert environment["EXAMPLE_CONFIG"] == str(tmp_path / "config.py")
     assert environment["PYTHONDONTWRITEBYTECODE"] == "1"
+
+
+def test_require_clean_dependency_drift_reports_clean_snapshot(tmp_path: Path):
+    from envs_xmpp_ops.dependency_drift import (
+        DependencyDriftReport,
+        DependencyVersion,
+        require_clean_dependency_drift,
+    )
+
+    report = DependencyDriftReport(
+        constraint_file=tmp_path / "constraints.txt",
+        dependencies=(DependencyVersion(package="demo", expected="1.0", installed="1.0"),),
+    )
+    lines: list[str] = []
+
+    require_clean_dependency_drift(report, print_func=lines.append)
+
+    assert lines == ["OK  dependency drift: clean (1 runtime dependencies match constraints)"]
+
+
+def test_require_clean_dependency_drift_preserves_frontend_error_type(tmp_path: Path):
+    from envs_xmpp_ops.dependency_drift import (
+        DependencyDriftReport,
+        DependencyVersion,
+        require_clean_dependency_drift,
+    )
+
+    class DeployError(RuntimeError):
+        pass
+
+    report = DependencyDriftReport(
+        constraint_file=tmp_path / "constraints.txt",
+        dependencies=(DependencyVersion(package="demo", expected="1.0", installed="2.0"),),
+    )
+
+    with pytest.raises(
+        DeployError,
+        match=r"runtime dependency drift detected: demo: installed 2\.0, expected 1\.0",
+    ):
+        require_clean_dependency_drift(report, error_factory=DeployError)

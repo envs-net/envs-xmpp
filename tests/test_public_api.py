@@ -87,6 +87,7 @@ from envs_xmpp_ops import (
     DeploymentTarget,
     deployment_environment,
     inspect_dependency_drift,
+    require_clean_dependency_drift,
     resolve_environment_path,
     service_account,
     split_systemd_words,
@@ -98,8 +99,8 @@ from envs_xmpp_ops import (
 )
 
 
-def test_distribution_version_is_1_6_1() -> None:
-    assert __version__ == "1.7.0"
+def test_distribution_version_is_current() -> None:
+    assert __version__ == "1.7.1"
 
 
 def test_stable_convenience_imports_are_exposed() -> None:
@@ -185,6 +186,8 @@ def test_stable_convenience_imports_are_exposed() -> None:
         DeploymentTarget,
         deployment_environment,
         inspect_dependency_drift,
+        require_clean_dependency_drift,
+    require_clean_dependency_drift,
         resolve_environment_path,
         service_account,
         split_systemd_words,

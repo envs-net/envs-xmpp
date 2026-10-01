@@ -124,6 +124,26 @@ def installed_versions(
     return {normalize_package_name(name): value for name, value in raw.items()}
 
 
+def require_clean_dependency_drift(
+    report: DependencyDriftReport,
+    *,
+    error_factory: Callable[[str], Exception] = RuntimeError,
+    print_func: Callable[[str], None] = print,
+) -> None:
+    """Require an installed runtime to match its reviewed constraint snapshot.
+
+    Deployment frontends previously duplicated this small policy wrapper around
+    :class:`DependencyDriftReport`.  Keep the report construction separate from
+    the operator-facing gate so callers can still inspect or render drift without
+    turning it into a deployment failure.
+    """
+    if report.ok:
+        print_func(f"OK  dependency drift: {report.summary()}")
+        return
+    details = "; ".join(report.details())
+    raise error_factory(f"runtime dependency drift detected: {details}")
+
+
 def inspect_dependency_drift(
     project_root: Path,
     python: Path,

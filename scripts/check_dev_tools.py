@@ -15,6 +15,7 @@ _TOOL_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
         ("mypy", "mypy"),
         ("build", "build"),
         ("twine", "twine"),
+        ("pip_audit", "pip-audit"),
     ),
     "mutation": (("mutmut", "mutmut"),),
 }

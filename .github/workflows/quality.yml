@@ -52,3 +52,8 @@ jobs:
       - name: Check distribution metadata
         if: matrix.python-version == '3.14'
         run: python -m twine check dist/*
+
+      - name: Dependency audit
+        run: |
+          uv export --locked --all-extras --no-emit-project --no-hashes --format requirements.txt --output-file "$RUNNER_TEMP/envs-xmpp-audit.txt"
+          python -m pip_audit --no-deps --strict -r "$RUNNER_TEMP/envs-xmpp-audit.txt"

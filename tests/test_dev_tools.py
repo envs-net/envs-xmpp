@@ -64,7 +64,7 @@ def test_missing_tools_reports_distribution_names(monkeypatch: pytest.MonkeyPatc
     namespace = _load_script()
     missing_tools = namespace["missing_tools"]
 
-    available = {"pytest", "ruff", "mypy", "build", "twine"}
+    available = {"pytest", "ruff", "mypy", "build", "twine", "pip_audit"}
     monkeypatch.setattr(
         importlib.util,
         "find_spec",
@@ -78,7 +78,7 @@ def test_missing_tools_reports_distribution_names(monkeypatch: pytest.MonkeyPatc
 def test_main_prints_actionable_install_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     namespace = _load_script()
     # Patch the function's global import lookup instead of requiring any real dev tool state.
-    available = {"pytest", "ruff", "mypy", "build", "twine"}
+    available = {"pytest", "ruff", "mypy", "build", "twine", "pip_audit"}
     monkeypatch.setattr(
         importlib.util,
         "find_spec",
@@ -98,3 +98,22 @@ def test_shell_wrappers_run_dev_tool_preflight() -> None:
     assert "python scripts/check_dev_tools.py quality" in quality
     assert mutmut.count("python scripts/check_dev_tools.py mutation") == 2
     assert mutmut.count("python -m envs_xmpp_ops.regression mutation-tool-check") == 2
+
+
+def test_quality_security_audit_configuration() -> None:
+    import tomllib
+
+    project = tomllib.loads(
+        ROOT.joinpath("pyproject.toml").read_text()
+    )
+    dev = project["project"]["optional-dependencies"]["dev"]
+
+    assert any(dep.startswith("pip-audit") for dep in dev)
+    assert any(dep.startswith("uv>=") for dep in dev)
+
+    quality = ROOT.joinpath("scripts/quality.sh").read_text()
+
+    assert "[8/8] Dependency audit (pip-audit)" in quality
+    assert "uv export --locked --all-extras" in quality
+    assert "python -m pip_audit --no-deps --strict" in quality
+    assert "Quality checks passed (8/8)." in quality
